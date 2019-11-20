@@ -1,0 +1,43 @@
+From 1e8ad39a6228ca74aaac7413bfde057761ad06f1 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Fri, 11 Oct 2013 22:38:35 +0200
+Subject: Add SST 26VF064B SPI flash support.
+
+SST's 26VF* series is largely compatible to the 25VF* chips so simply add a
+table entry with name, ID and parameters.
+
+The 26VFs feature a new quad bit mode; set the appropriate feature flag even
+though the i.MX6 doesn't even support the older dual mode yet (for which we
+also set the flag for the 25VF064C while we're at it).
+
+Unfortunately the 26VFs also use a completely new, incompatible block
+protection scheme, which Linux's spi-nor driver doesn't know yet. But for
+now we rely on U-Boot having unlocked everything before booting, so writing
+works fine. The production version LEC-iMX6 will switch back to the SST
+25VF064C, anyway.
+
+diff --git a/drivers/mtd/spi-nor/spi-nor.c b/drivers/mtd/spi-nor/spi-nor.c
+index 0185b7a..c64b17e 100644
+--- a/drivers/mtd/spi-nor/spi-nor.c
++++ b/drivers/mtd/spi-nor/spi-nor.c
+@@ -636,12 +636,16 @@ static const struct spi_device_id spi_nor_ids[] = {
+ 	{ "sst25vf080b", INFO(0xbf258e, 0, 64 * 1024, 16, SECT_4K | SST_WRITE) },
+ 	{ "sst25vf016b", INFO(0xbf2541, 0, 64 * 1024, 32, SECT_4K | SST_WRITE) },
+ 	{ "sst25vf032b", INFO(0xbf254a, 0, 64 * 1024, 64, SECT_4K | SST_WRITE) },
+-	{ "sst25vf064c", INFO(0xbf254b, 0, 64 * 1024, 128, SECT_4K) },
++	{ "sst25vf064c", INFO(0xbf254b, 0, 64 * 1024,128, SECT_4K | SPI_NOR_DUAL_READ) },
+ 	{ "sst25wf512",  INFO(0xbf2501, 0, 64 * 1024,  1, SECT_4K | SST_WRITE) },
+ 	{ "sst25wf010",  INFO(0xbf2502, 0, 64 * 1024,  2, SECT_4K | SST_WRITE) },
+ 	{ "sst25wf020",  INFO(0xbf2503, 0, 64 * 1024,  4, SECT_4K | SST_WRITE) },
+ 	{ "sst25wf040",  INFO(0xbf2504, 0, 64 * 1024,  8, SECT_4K | SST_WRITE) },
+ 	{ "sst25wf080",  INFO(0xbf2505, 0, 64 * 1024, 16, SECT_4K | SST_WRITE) },
++	/* FIXME: The SST 26VF* series also features a new individual block
++	 * protection scheme which will need implementing, however U-Boot
++	 * unlocks everything for us so we can skip that for now. */
++	{ "sst26vf064b", INFO(0xbf2643, 0, 64 * 1024,128, SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+ 
+ 	/* ST Microelectronics -- newer production may have feature updates */
+ 	{ "m25p05",  INFO(0x202010,  0,  32 * 1024,   2, 0) },
+-- 
+2.1.4
+

@@ -1,0 +1,12 @@
+[Unit]
+Description=Weston Wayland Compositor
+RequiresMountsFor=/run
+
+[Service]
+User=root
+EnvironmentFile=-/etc/default/weston
+ExecStartPre=$EXEC_PRE
+ExecStart=/usr/bin/weston-start $OPENVTARGS -- $WESTONARGS
+
+[Install]
+WantedBy=multi-user.target

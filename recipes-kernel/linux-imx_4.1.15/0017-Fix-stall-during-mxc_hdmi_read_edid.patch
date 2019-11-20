@@ -1,0 +1,154 @@
+From 0d1aa49d8b6c62d28e81a6240f2e6846774db095 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Mon, 8 Aug 2016 22:08:28 +0200
+Subject: Fix stall during mxc_hdmi_read_edid().
+
+Boot reliability testing encountered sporadic hangs with the following
+backtrace. A HDMI monitor was attached, dmesg indicated its EDID couldn't be
+read properly.
+
+INFO: rcu_sched self-detected stall on CPU { 0}  (t=2100 jiffies g=-288 c=-289 q=13)
+Task dump for CPU 0:
+kworker/0:1     R running      0    28      2 0x00000002
+Workqueue: events hotplug_worker
+...
+Exception stack(0xd8271b88 to 0xd8271bd0)
+1b80:                   d8271bdc 00007e04 ffac8100 806a78b8 0877f778 00000bb7
+1ba0: d8278920 00000081 d82780d4 0000004b 00000005 d8271c14 00000053 d8271bd0
+1bc0: 801e091c 801e08d4 a0000113 ffffffff
+[<800124c0>] (__irq_svc) from [<801e08d4>] (read_current_timer+0x14/0x38)
+[<801e08d4>] (read_current_timer) from [<801e091c>] (__timer_delay+0x24/0x48)
+[<801e091c>] (__timer_delay) from [<80239050>] (hdmi_edid_i2c_read+0x74/0xb8)
+[<80239050>] (hdmi_edid_i2c_read) from [<80239350>] (mxc_hdmi_read_edid+0x2bc/0x3c0)
+[<80239350>] (mxc_hdmi_read_edid) from [<8023a360>] (hotplug_worker+0x64/0x324)
+[<8023a360>] (hotplug_worker) from [<8003a36c>] (process_one_work+0x1d4/0x30c)
+[<8003a36c>] (process_one_work) from [<8003afc0>] (worker_thread+0x2d8/0x428)
+[<8003afc0>] (worker_thread) from [<8003ef2c>] (kthread+0xd8/0xec)
+[<8003ef2c>] (kthread) from [<8000eaa8>] (ret_from_fork+0x14/0x2c)
+
+The problem is the HDMI EDID code sucks. It ignores read errors (returning
+previous content) and its long timeouts add up to 4 s per 128 byte EDID
+block. The only validity check is the first 3 header bytes. If an unreliable
+DDC passes this, but fails everywhere else, the worst case (number of
+extended blocks randomly returned as 0xFE) can lead to a total of 16 min
+spent in udelay(). RCU stall detection triggers after 21 s.
+
+A proper fix would be a rewrite, merging mxc_edid_read_internal() etc. with
+mxc_edid_read(). But everything I change I'd have to merge again for each
+release. (Mainline doesn't have this driver, and upstreaming to Freescale
+usually gets ignored. And if they do take your code (after 2 resends) they
+delete your name/Signed-off from the commit and steal your authorship -
+happened to me with all 3 commits I managed to push to them!)
+
+Therefore we only make the most essential, minimal fixes:
+- When parsing CEA ext block check if DTD offset exceeds buffer.
+- Reading a DDC byte takes about 100 us, poll every 125-250 us instead of
+  1000 us.
+- Poll with usleep_range() instead of udelay(). Scheduling should keep RCU
+  happy, no matter how long we take.
+- Check controller's error flag, hopefully usually avoiding having to wait
+  for the timeout.
+- Reduce timeout from 30 ms to 3-6 ms.
+- On error return 0xFF instead of random previous data byte. Even better
+  would be to pass the error to the caller, but the changes would be too
+  large, see above. At least 0xFF means no extended blocks, avoiding the
+  worst case above.
+- Check the whole 8 byte EDID header instead of just the first 3 bytes.
+
+I decided against adding code to check the block checksum, because up to
+EDID 1.3 it was only recommended, not mandatory, and I can't risk breaking
+monitors which used to work. (On the other hand the header also is only
+recommended and Linux' FB core does check the checksum even if it doesn't
+pass failure to the caller.)
+
+diff --git a/drivers/video/fbdev/mxc/mxc_edid.c b/drivers/video/fbdev/mxc/mxc_edid.c
+index 23110ce..bd70594 100644
+--- a/drivers/video/fbdev/mxc/mxc_edid.c
++++ b/drivers/video/fbdev/mxc/mxc_edid.c
+@@ -280,6 +280,8 @@ int mxc_edid_parse_ext_blk(unsigned char *edid,
+ 		return 0;
+ 	revision = edid[index++];
+ 	DPRINTK("cea extent revision %d\n", revision);
++	if (edid[index /*2*/] >= EDID_LENGTH)
++		return -1; /* detail_timing_desc_offset would overflow */
+ 	mode = kzalloc(50 * sizeof(struct fb_videomode), GFP_KERNEL);
+ 	if (mode == NULL)
+ 		return -1;
+diff --git a/drivers/video/fbdev/mxc/mxc_hdmi.c b/drivers/video/fbdev/mxc/mxc_hdmi.c
+index c1b5126..595b8db 100644
+--- a/drivers/video/fbdev/mxc/mxc_hdmi.c
++++ b/drivers/video/fbdev/mxc/mxc_hdmi.c
+@@ -895,21 +895,20 @@ static int hdmi_phy_i2c_write_verify(struct mxc_hdmi *hdmi, unsigned short data,
+ }
+ #endif
+ 
+-static bool  hdmi_edid_wait_i2c_done(struct mxc_hdmi *hdmi, int msec)
++static bool hdmi_edid_wait_i2c_done(struct mxc_hdmi *hdmi, int msec)
+ {
+-    unsigned char val = 0;
+-    val = hdmi_readb(HDMI_IH_I2CM_STAT0) & 0x2;
+-    while (val == 0) {
++	u8 stat;
+ 
+-		udelay(1000);
++	msec *= 8;
++	while (!((stat = hdmi_readb(HDMI_IH_I2CM_STAT0)) & 0x03)) {
+ 		if (msec-- == 0) {
+ 			dev_dbg(&hdmi->pdev->dev,
+ 					"HDMI EDID i2c operation time out!!\n");
+ 			return false;
+ 		}
+-		val = hdmi_readb(HDMI_IH_I2CM_STAT0) & 0x2;
++		usleep_range(1000/8, 2000/8);
+ 	}
+-	return true;
++	return !(stat & 0x01);
+ }
+ 
+ static u8 hdmi_edid_i2c_read(struct mxc_hdmi *hdmi,
+@@ -917,7 +916,7 @@ static u8 hdmi_edid_i2c_read(struct mxc_hdmi *hdmi,
+ {
+ 	u8 spointer = blockno / 2;
+ 	u8 edidaddress = ((blockno % 2) * 0x80) + addr;
+-	u8 data;
++	u8 data = 0xFF;
+ 
+ 	hdmi_writeb(0xFF, HDMI_IH_I2CM_STAT0);
+ 	hdmi_writeb(edidaddress, HDMI_I2CM_ADDRESS);
+@@ -929,8 +928,8 @@ static u8 hdmi_edid_i2c_read(struct mxc_hdmi *hdmi,
+ 		hdmi_writeb(HDMI_I2CM_OPERATION_READ_EXT,
+ 			HDMI_I2CM_OPERATION);
+ 
+-	hdmi_edid_wait_i2c_done(hdmi, 30);
+-	data = hdmi_readb(HDMI_I2CM_DATAI);
++	if (hdmi_edid_wait_i2c_done(hdmi, 3))
++		data = hdmi_readb(HDMI_I2CM_DATAI);
+ 	hdmi_writeb(0xFF, HDMI_IH_I2CM_STAT0);
+ 	return data;
+ }
+@@ -1545,16 +1544,14 @@ static int mxc_edid_read_internal(struct mxc_hdmi *hdmi, unsigned char *edid,
+ 	memset(edid, 0, EDID_LENGTH*4);
+ 	memset(cfg, 0, sizeof(struct mxc_edid_cfg));
+ 
+-	/* Check first three byte of EDID head */
+-	if (!(hdmi_edid_i2c_read(hdmi, 0, 0) == 0x00) ||
+-		!(hdmi_edid_i2c_read(hdmi, 1, 0) == 0xFF) ||
+-		!(hdmi_edid_i2c_read(hdmi, 2, 0) == 0xFF)) {
+-		dev_info(&hdmi->pdev->dev, "EDID head check failed!");
+-		return -ENOENT;
+-	}
+-
+ 	for (i = 0; i < 128; i++) {
++		static const unsigned char edid_v1_header[] =
++				{ 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
+ 		*ediddata = hdmi_edid_i2c_read(hdmi, i, 0);
++		if (i < ARRAY_SIZE(edid_v1_header) && *ediddata != edid_v1_header[i]) {
++			dev_info(&hdmi->pdev->dev, "EDID head check failed!");
++			return -ENOENT;
++		}
+ 		ediddata++;
+ 	}
+ 
+-- 
+2.1.4
+

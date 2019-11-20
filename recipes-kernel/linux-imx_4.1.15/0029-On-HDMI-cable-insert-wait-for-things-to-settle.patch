@@ -1,0 +1,36 @@
+From dbdecb697c916ef6397964b4650013d452ce0d83 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Wed, 19 Nov 2014 14:01:21 +0100
+Subject: On HDMI cable insert wait for things to settle.
+
+In case the HDMI cable connect interrupt triggers before the connector is
+fully inserted wait a while to allow things to settle.
+
+This also works around a race condition (at least on 3.10 kernels) hanging
+Linux if certain HDMI monitors are already present when the kernel boots.
+
+diff --git a/drivers/video/fbdev/mxc/mxc_hdmi.c b/drivers/video/fbdev/mxc/mxc_hdmi.c
+index 595b8db..7855b91 100644
+--- a/drivers/video/fbdev/mxc/mxc_hdmi.c
++++ b/drivers/video/fbdev/mxc/mxc_hdmi.c
+@@ -1916,6 +1916,17 @@ static void mxc_hdmi_cable_connected(struct mxc_hdmi *hdmi)
+ 
+ 	hdmi->cable_plugin = true;
+ 
++	/* Cable may not be fully inserted yet, allow things to settle. */
++	/* FIXME: Also a race condition (at least on 3.10 kernels) caused a hang
++	 * at "fb_new_modelist(hdmi->fbi);" in mxc_hdmi_edid_rebuild_modelist()
++	 * (AFAICT so far) when certain HDMI monitors are detected at boot. The
++	 * same monitors work fine if attached later or debugging is enabled or
++	 * booting with "nosmp" or a udelay(100) is inserted immediatley before
++	 * the fb_new_modelist() call. The correct solution would be proper
++	 * locking, however my superiors asked me not to spend any further time
++	 * investigating. :-( This sleep also 'fixes' the problem. */
++	msleep(400);
++
+ 	/* HDMI Initialization Step C */
+ 	edid_status = mxc_hdmi_read_edid(hdmi);
+ 
+-- 
+2.1.4
+

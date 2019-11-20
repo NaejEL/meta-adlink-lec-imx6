@@ -1,0 +1,75 @@
+From b0d42836de6eb74f3cc16ed2810ce04580347c1e Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Tue, 31 Mar 2015 16:26:26 +0200
+Subject: Fix camera overlay window blocking after moving/resizing.
+
+When a camera app is started the i.MX6 driver's foreground_sdc_select(),
+foreground_start() and foreground_enable_csi() are called, when it quits
+the sequence is foreground_disable_csi(), foreground_stop() and
+foreground_sdc_unselect().
+
+However when the active camera window is moved/resized (at least with
+xawtv) then the init sequence (select, start, enable) is simply run again.
+But foreground_sdc_select() unconditionally clears overlay_active,
+consequently foreground_start() cannot know it has run already, will try to
+get resources (like IRQs) a second time and fail. When the application
+eventually quits, because overlay_active==false, the resources will not be
+freed by foreground_stop() and the camera will be unusable until
+rebooting.
+
+To solve this don't clear overlay_active in foreground_sdc_select(). The
+struct should have been zeroed anyway upon creation so explicit clearing is
+unnecessary. Now foreground_start() is able to tell if it has to init
+everything or just update the window pos/size, so check overlay_active at
+the right places to do only what is asked for. Also foreground_stop()
+should work now as intended.
+
+diff --git a/drivers/media/platform/mxc/capture/ipu_fg_overlay_sdc.c b/drivers/media/platform/mxc/capture/ipu_fg_overlay_sdc.c
+index 4d6b136..8cad596 100644
+--- a/drivers/media/platform/mxc/capture/ipu_fg_overlay_sdc.c
++++ b/drivers/media/platform/mxc/capture/ipu_fg_overlay_sdc.c
+@@ -358,11 +358,6 @@ static int foreground_start(void *private)
+ 		return -EIO;
+ 	}
+ 
+-	if (cam->overlay_active == true) {
+-		pr_debug("already started.\n");
+-		return 0;
+-	}
+-
+ 	get_disp_ipu(cam);
+ 
+ 	for (i = 0; i < num_registered_fb; i++) {
+@@ -382,7 +377,8 @@ static int foreground_start(void *private)
+ 	fbvar = fbi->var;
+ 
+ 	/* Store the overlay frame buffer's original std */
+-	cam->fb_origin_std = fbvar.nonstd;
++	if (!cam->overlay_active)
++		cam->fb_origin_std = fbvar.nonstd;
+ 
+ 	if (cam->devtype == IMX5_V4L2 || cam->devtype == IMX6_V4L2) {
+ 		/* Use DP to do CSC so that we can get better performance */
+@@ -430,6 +426,11 @@ static int foreground_start(void *private)
+ 	ipu_update_channel_buffer(disp_ipu, MEM_FG_SYNC, IPU_INPUT_BUFFER,
+ 					1, fbi->fix.smem_start);
+ 
++	if (cam->overlay_active) {
++		pr_debug("already started.\n");
++		return 0;
++	}
++
+ 	err = csi_enc_enabling_tasks(cam);
+ 	if (err != 0) {
+ 		printk(KERN_ERR "Error csi enc enable fail\n");
+@@ -581,7 +582,6 @@ int foreground_sdc_select(void *private)
+ 		cam->vf_stop_sdc = foreground_stop;
+ 		cam->vf_enable_csi = foreground_enable_csi;
+ 		cam->vf_disable_csi = foreground_disable_csi;
+-		cam->overlay_active = false;
+ 	} else
+ 		err = -EIO;
+ 
+-- 
+2.1.4
+

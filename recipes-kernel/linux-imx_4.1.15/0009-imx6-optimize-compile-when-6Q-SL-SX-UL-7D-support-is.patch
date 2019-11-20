@@ -1,0 +1,182 @@
+From cf0fe97dd9ad05b876a1ef6f17f811bb3a03fa71 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Tue, 15 Oct 2013 17:46:39 +0200
+Subject: imx6: optimize compile when 6Q/SL/SX/UL/7D support is disabled
+
+When e.g. CONFIG_SOC_IMX6SL=n make cpu_is_imx6sl() return constant false instead
+of checking CPU registers. Same for other i.MX models, allowing the compiler to drop dead code.
+
+Old 3.10.x kernels even produced a few link errors e.g. in imx6q_pm_enter()
+when CONFIG_SOC_IMX6Q=y but SOC_IMX6SL or SOC_IMX6SX=n; these
+have been '#ifdef'ed in 4.1, however handling this in cpu_is_*() in the header
+looks cleaner and allows more optimizations.
+
+imx_src_is_m4_enabled() might have been turned constant, too (!SX && !7D AFAICT), but
+this didn't seem worth it.
+
+Instead this patch also targets similar checks in the PCIe driver.
+
+Also fixes an annoying warning about imx_gpcv2_add_m4_wake_up_irq() being
+unused.
+
+diff --git a/arch/arm/mach-imx/common.h b/arch/arm/mach-imx/common.h
+index 510fc2b..5f825d6 100644
+--- a/arch/arm/mach-imx/common.h
++++ b/arch/arm/mach-imx/common.h
+@@ -147,7 +147,7 @@ void imx_gpcv2_add_m4_wake_up_irq(u32 hwirq, bool enable);
+ #else
+ static inline int imx_gpcv2_mf_power_on(unsigned int irq, unsigned int on) { return 0; }
+ static inline void imx_gpcv2_set_core1_pdn_pup_by_software(bool pdn) {}
+-static void imx_gpcv2_add_m4_wake_up_irq(u32 hwirq, bool enable) {}
++static inline void imx_gpcv2_add_m4_wake_up_irq(u32 hwirq, bool enable) {}
+ #endif
+ void __init imx_gpcv2_check_dt(void);
+ void imx_gpcv2_set_lpm_mode(enum mxc_cpu_pwr_mode mode);
+diff --git a/arch/arm/mach-imx/mxc.h b/arch/arm/mach-imx/mxc.h
+index b73972a..41805fb 100644
+--- a/arch/arm/mach-imx/mxc.h
++++ b/arch/arm/mach-imx/mxc.h
+@@ -166,50 +166,71 @@ extern unsigned int __mxc_arch_type;
+ #endif
+ 
+ #ifndef __ASSEMBLY__
+-#ifdef CONFIG_SOC_IMX6SL
+ static inline bool cpu_is_imx6sl(void)
+ {
++#ifdef CONFIG_SOC_IMX6SL
+ 	return __mxc_cpu_type == MXC_CPU_IMX6SL;
+-}
+ #else
+-static inline bool cpu_is_imx6sl(void)
+-{
+ 	return false;
+-}
+ #endif
++}
+ 
+ static inline bool cpu_is_imx6dl(void)
+ {
++#ifdef CONFIG_SOC_IMX6Q /* Q means Q/DL in this case */
+ 	return __mxc_cpu_type == MXC_CPU_IMX6DL;
++#else
++	return false;
++#endif
+ }
+ 
+ static inline bool cpu_is_imx6sx(void)
+ {
++#ifdef CONFIG_SOC_IMX6SX
+ 	return __mxc_cpu_type == MXC_CPU_IMX6SX;
++#else
++	return false;
++#endif
+ }
+ 
+ static inline bool cpu_is_imx6ul(void)
+ {
++#ifdef CONFIG_SOC_IMX6UL
+ 	return __mxc_cpu_type == MXC_CPU_IMX6UL;
++#else
++	return false;
++#endif
+ }
+ 
+ static inline bool cpu_is_imx6q(void)
+ {
++#ifdef CONFIG_SOC_IMX6Q
+ 	return __mxc_cpu_type == MXC_CPU_IMX6Q;
++#else
++	return false;
++#endif
+ }
+ 
+ static inline bool cpu_is_imx6(void)
+ {
++#ifdef CONFIG_SOC_IMX6
+ 	return __mxc_cpu_type == MXC_CPU_IMX6Q ||
+ 		__mxc_cpu_type == MXC_CPU_IMX6DL ||
+ 		__mxc_cpu_type == MXC_CPU_IMX6SL ||
+ 		__mxc_cpu_type == MXC_CPU_IMX6SX ||
+ 		__mxc_cpu_type == MXC_CPU_IMX6UL;
++#else
++	return false;
++#endif
+ }
+ 
+ static inline bool cpu_is_imx7d(void)
+ {
++#ifdef CONFIG_SOC_IMX7D
+ 	return __mxc_cpu_type == MXC_CPU_IMX7D;
++#else
++	return false;
++#endif
+ }
+ 
+ static inline bool arm_is_ca7(void)
+diff --git a/arch/arm/mach-imx/pm-imx6.c b/arch/arm/mach-imx/pm-imx6.c
+index ecc8f4e..a516133 100644
+--- a/arch/arm/mach-imx/pm-imx6.c
++++ b/arch/arm/mach-imx/pm-imx6.c
+@@ -801,16 +801,12 @@ static int imx6q_pm_enter(suspend_state_t state)
+ 		imx6q_set_lpm(STOP_POWER_ON);
+ 		imx6q_set_int_mem_clk_lpm(true);
+ 		imx_gpc_pre_suspend(false);
+-#ifdef CONFIG_SOC_IMX6SL
+ 		if (cpu_is_imx6sl())
+ 			imx6sl_set_wait_clk(true);
+-#endif
+ 		/* Zzz ... */
+ 		cpu_do_idle();
+-#ifdef CONFIG_SOC_IMX6SL
+ 		if (cpu_is_imx6sl())
+ 			imx6sl_set_wait_clk(false);
+-#endif
+ 		imx_gpc_post_resume();
+ 		imx6q_set_lpm(WAIT_CLOCKED);
+ 		break;
+diff --git a/drivers/pci/host/pci-imx6.c b/drivers/pci/host/pci-imx6.c
+index e83bc57..a104f88 100644
+--- a/drivers/pci/host/pci-imx6.c
++++ b/drivers/pci/host/pci-imx6.c
+@@ -100,26 +100,38 @@ struct imx6_pcie {
+ 
+ static inline bool is_imx7d_pcie(struct imx6_pcie *imx6_pcie)
+ {
++#ifdef CONFIG_SOC_IMX7D
+ 	struct pcie_port *pp = &imx6_pcie->pp;
+ 	struct device_node *np = pp->dev->of_node;
+ 
+ 	return of_device_is_compatible(np, "fsl,imx7d-pcie");
++#else
++	return false;
++#endif
+ }
+ 
+ static inline bool is_imx6sx_pcie(struct imx6_pcie *imx6_pcie)
+ {
++#ifdef CONFIG_SOC_IMX6SX
+ 	struct pcie_port *pp = &imx6_pcie->pp;
+ 	struct device_node *np = pp->dev->of_node;
+ 
+ 	return of_device_is_compatible(np, "fsl,imx6sx-pcie");
++#else
++	return false;
++#endif
+ }
+ 
+ static inline bool is_imx6qp_pcie(struct imx6_pcie *imx6_pcie)
+ {
++#ifdef CONFIG_SOC_IMX6Q
+ 	struct pcie_port *pp = &imx6_pcie->pp;
+ 	struct device_node *np = pp->dev->of_node;
+ 
+ 	return of_device_is_compatible(np, "fsl,imx6qp-pcie");
++#else
++	return false;
++#endif
+ }
+ 
+ static int pcie_phy_poll_ack(void __iomem *dbi_base, int exp_val)
+-- 
+2.1.4
+

@@ -1,0 +1,43 @@
+From 27858c35d96f6b5bb36e588aec5345363df9143f Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Thu, 9 Jun 2016 15:51:03 +0200
+Subject: Restore vanished HDMI DT documentation.
+
+Freescale's 3.10 kernel had mxc_hdmi_video.txt documenting the MXC HDMI
+driver Device Tree bindings. In 4.1 the file is suddenly gone, though the
+driver remains almost unchanged.
+
+Copy the text from old kernel. While we're at it change description of
+"fsl,hdcp" from 'required' to 'optional' property, because that's what it
+is.
+
+diff --git a/Documentation/devicetree/bindings/video/mxc_hdmi_video.txt b/Documentation/devicetree/bindings/video/mxc_hdmi_video.txt
+new file mode 100644
+index 0000000..4836da5
+--- /dev/null
++++ b/Documentation/devicetree/bindings/video/mxc_hdmi_video.txt
+@@ -0,0 +1,21 @@
++Device-Tree bindings for hdmi video driver
++
++Required properties:
++- compatible: value should be "fsl,imx6q-hdmi-video".
++- fsl,phy_reg_vlev: hdmi phy register,Voltage Level Control Register offset 0x0e,
++  adjust hdmi phy signal voltage level.
++- fsl,phy_reg_cksymtx: hdmi phy register, clock symbol and transmitter control
++  register offset 0x09, adjust hdmi signal pre-emphasis.
++
++Optional properties:
++- fsl,hdcp: define the property in dts, hdmi driver will initalize for hdcp,
++  otherwise hdcp function will not supported.
++
++Example:
++
++	hdmi_video {
++		compatible = "fsl,imx6q-hdmi-video";
++		fsl,hdcp;
++		fsl,phy_reg_vlev = <0x0294>;
++		fsl,phy_reg_cksymtx = <0x800d>;
++	};
+-- 
+2.1.4
+

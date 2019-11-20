@@ -1,0 +1,61 @@
+From 190e2f55132c450a1ddcf3468d7763a2e66ef576 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Sun, 12 Jan 2014 20:41:13 +0100
+Subject: Set up S/PDIF in/out ports.
+
+- SabreSD didn't have S/PDIF at all, copy S/PDIF-in from SabreAuto.
+- Also enable S/PDIF-out.
+- Create different pinmux setting.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 7a081a6..702d4c5 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -196,6 +196,14 @@
+ 		hdmi-controller = <&hdmi_audio>;
+ 	};
+ 
++	sound-spdif {
++		compatible = "fsl,imx-audio-spdif";
++		model = "imx-spdif";
++		spdif-controller = <&spdif>;
++		spdif-in;
++		spdif-out;
++	};
++
+ 	mxcfb1: fb@0 {
+ 		compatible = "fsl,mxc_sdc_fb";
+ 		disp_dev = "ldb";
+@@ -814,6 +822,13 @@
+ 			>;
+ 		};
+ 
++		pinctrl_spdif: spdifgrp {
++			fsl,pins = <	/* SMARC SPDIF_IN/OUT */
++				MX6QDL_PAD_GPIO_16__SPDIF_IN		0x1b0b0
++				MX6QDL_PAD_GPIO_19__SPDIF_OUT		0x1b0b0
++			>;
++		};
++
+ 		pinctrl_uart1: uart1grp {
+ 			fsl,pins = <	/* SMARC SER0 */
+ 				MX6QDL_PAD_SD3_DAT6__UART1_RX_DATA	0x1b0b1
+@@ -980,6 +995,15 @@
+ 	status = "okay";
+ };
+ 
++&spdif {	/* SMARC SPDIF_IN/OUT */
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_spdif>;
++	assigned-clocks = <&clks IMX6QDL_CLK_SPDIF_SEL>, <&clks IMX6QDL_CLK_SPDIF_PODF>;
++	assigned-clock-parents = <&clks IMX6QDL_CLK_PLL3_PFD3_454M>;
++	assigned-clock-rates = <0>, <227368421>;
++	status = "okay";
++};
++
+ #if CONFIG_I2S_AUDIO
+ &ssi2 {		/* SMARC I2S0 (instead of SPI0) */
+ 	status = "okay";
+-- 
+2.1.4
+

@@ -1,0 +1,47 @@
+From 2af3bb2fabedae6c033901ea0d61c679336a040f Mon Sep 17 00:00:00 2001
+From: Max Krummenacher <max.krummenacher@toradex.com>
+Date: Mon, 23 Jun 2014 17:26:31 +0200
+Subject: pci-imx6.c: add config option to force GEN1 speed
+
+
+diff --git a/drivers/pci/host/Kconfig b/drivers/pci/host/Kconfig
+index cac9472..82dc1d4 100644
+--- a/drivers/pci/host/Kconfig
++++ b/drivers/pci/host/Kconfig
+@@ -39,6 +39,10 @@ config PCI_IMX6_COMPLIANCE_TEST
+ 	  on FSL iMX SoCs. The pcie clks wouldn't be turned off, and the link
+ 	  speed wouldn't be limited to gen1 when the Y is set here.
+ 
++config PCI_FORCE_GEN1
++	bool "Force GEN1 speed on the PCIe controller (e.g. don't allow GEN2)"
++	depends on PCI_IMX6
++
+ config EP_MODE_IN_EP_RC_SYS
+ 	bool "PCI Express EP mode in the IMX6 RC/EP interconnection system"
+ 	depends on PCI_IMX6
+diff --git a/drivers/pci/host/pci-imx6.c b/drivers/pci/host/pci-imx6.c
+index 9b6bc73..8fef468 100644
+--- a/drivers/pci/host/pci-imx6.c
++++ b/drivers/pci/host/pci-imx6.c
+@@ -562,7 +562,7 @@ static int imx6_pcie_start_link(struct pcie_port *pp)
+ 	ret = imx6_pcie_wait_for_link(pp);
+ 	if (ret)
+ 		return ret;
+-
++#ifndef CONFIG_PCI_FORCE_GEN1
+ 	/* Allow Gen2 mode after the link is up. */
+ 	tmp = readl(pp->dbi_base + PCIE_RC_LCR);
+ 	tmp &= ~PCIE_RC_LCR_MAX_LINK_SPEEDS_MASK;
+@@ -592,6 +592,9 @@ static int imx6_pcie_start_link(struct pcie_port *pp)
+ 
+ 	/* Make sure link training is finished as well! */
+ 	ret = imx6_pcie_wait_for_link(pp);
++#else
++	dev_info(pp->dev, "Configuration forces GEN1\n");
++#endif /* CONFIG_PCI_FORCE_GEN1 */
+ 
+ 	if (ret) {
+ 		dev_err(pp->dev, "Failed to bring link up!\n");
+-- 
+2.1.4
+

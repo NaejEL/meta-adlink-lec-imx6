@@ -1,0 +1,64 @@
+From 7b327b716e23adcabf6c9fb9b49cb0d94b0a5d83 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Fri, 10 Jun 2016 17:48:30 +0200
+Subject: Add instructive comments.
+
+Help people like me, who didn't know a thing about Device Trees when we
+started this project.
+
+- We don't have LEDs, but at least show how it's done. For this purpose the
+  "gpio-leds" driver gets compiled in by our defconfig. (Also an upcoming
+  LEC-iMX6 variant will likely get a LED.)
+- U-Boot overwrites the dummy size in the DDR3 memory node with the actual
+  value, don't bother editing it.
+- Comment that wdog1 needs to be explicitly disabled and that watchdog uses
+  WDOG2_B output: Wdog2 was meant as TrustZone watchdog and doesn't connect
+  to the System Reset Controller (SRC), but we need an external reset path
+  via -->BMC-->POR to reset module and carrier devices anyway, and
+  pin-muxing only left WDOG2_B unoccupied. And so far we're not interested
+  in TrustZone.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 2b8f436..97d630c 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -36,12 +36,18 @@
+ 		stdout-path = &uart1;
+ 	};
+ 
+-	leds {
+-		compatible = "gpio-leds";
+-	};
++	/* The LEC-Base carriers don't have any LEDs, just show how it's done. */
++	//leds {
++	//	compatible = "gpio-leds";
++	//
++	//	example-led {
++	//		gpios = <&smarc_gpio 5 GPIO_ACTIVE_LOW>; /* SMARC GPIO5/PWM_OUT */
++	//		linux,default-trigger = "mmc1"; /* more triggers in menuconfig */
++	//	};
++	//};
+ 
+ 	memory: memory {
+-		reg = <0x10000000 0x40000000>;
++		reg = <0x10000000 0x40000000>;	/* dummy size, overwritten by U-Boot */
+ 	};
+ 
+ 	regulators {
+@@ -1024,10 +1030,13 @@
+ };
+ 
+ &wdog1 {
++	/* Contrary to other nodes Freescale's dtsi doesn't default to "disabled" here. */
+ 	status = "disabled";
+ };
+ 
+ &wdog2 {
++	/* This is the TrustZone watchdog, however pin mux leaves no other choice.
++	 * We don't need an SoC reset (wdog_rst_b), but WDOG2_B --> system wide POR. */
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_wdog>;
+ 	fsl,wdog_b;
+-- 
+2.1.4
+

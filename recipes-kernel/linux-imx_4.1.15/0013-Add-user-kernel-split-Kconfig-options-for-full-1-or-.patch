@@ -1,0 +1,59 @@
+From ce6948b2390a8516f8c10779b5235dfa803b95fa Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Sun, 2 Feb 2014 17:06:36 +0100
+Subject: Add user/kernel split Kconfig options for full 1 or 2GB RAM.
+
+Very similar to x86, which provides these options for some time already, the
+new CONFIG_VMSPLIT_*_OPT options reduce CONFIG_PAGE_OFFSET by 320MB to allow
+using all available memory, avoiding messages like this:
+
+Truncating RAM at 10000000-8fffffff to -7f7fffff (vmalloc region overlap).
+
+Unfortunately Freescale's crappy Vivante driver (as of 4.1.15_1.2.0_ga)
+won't work if we deviate from the default 2G/2G split, the Yocto Qt5 demos
+get all messed up. Vivante must have hardcoded something, vanilla's 1G/3G is
+no good either, so it's not specific to this non-standard option. Therefore
+the LEC-iMX6 defconfig has to stick to HIGHMEM instead, but we still leave
+this option in.
+
+(The Vivante issue might or might not be related to the fact that commit
+444cf5487d5f "of: alloc anywhere from memblock if range not specified" from
+the 4.1.22 stable patch somehow collided with something Freescale did,
+forcing me to drop it. Otherwise highmem would be counted as normal memory
+(i.e. kernel reports highmem=0 and full RAM accesible even at 2G/2G), but
+reserving DMA buffers would fail, which later in the boot process leads to
+fb failing and CAAM panicing. No idea if it's related, but I wanted to
+preserve the thought.)
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index 8cdd440..22d1e48 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -1447,8 +1447,14 @@ choice
+ 
+ 	config VMSPLIT_3G
+ 		bool "3G/1G user/kernel split"
++	config VMSPLIT_3G_OPT
++		depends on !ARM_LPAE
++		bool "3G/1G user/kernel split (for full 1G low memory)"
+ 	config VMSPLIT_2G
+ 		bool "2G/2G user/kernel split"
++	config VMSPLIT_2G_OPT
++		depends on !ARM_LPAE
++		bool "2G/2G user/kernel split (for full 2G low memory)"
+ 	config VMSPLIT_1G
+ 		bool "1G/3G user/kernel split"
+ endchoice
+@@ -1457,7 +1463,9 @@ config PAGE_OFFSET
+ 	hex
+ 	default PHYS_OFFSET if !MMU
+ 	default 0x40000000 if VMSPLIT_1G
++	default 0x6C000000 if VMSPLIT_2G_OPT
+ 	default 0x80000000 if VMSPLIT_2G
++	default 0xAC000000 if VMSPLIT_3G_OPT
+ 	default 0xC0000000
+ 
+ config NR_CPUS
+-- 
+2.1.4
+

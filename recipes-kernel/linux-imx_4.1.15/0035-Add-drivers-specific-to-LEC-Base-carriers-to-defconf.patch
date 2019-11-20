@@ -1,0 +1,69 @@
+From 330f76c0612f59f3645411f71ddcaac9f4cfba57 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Tue, 10 May 2016 17:36:38 +0200
+Subject: Add drivers specific to LEC-Base carriers to defconfig.
+
+- U-Blox Neo-6Q USB GPS receiver (generic CDC ACM)
+- NXP PCF8575 I2C GPIO expander
+- TI TLV320AIC23B I2S audio codec (LEC-Base R1)
+- Freescale SGTL5000 I2S audio codec (LEC-Base R2)
+- TI TSC2046 SPI touch screen ("ads7846" driver)
+- Atmel AT24C08 I2C EEPROM
+
+For these devices no driver was included:
+- Maxim DS1337 I2C RTC (leave driver disabled: we have an on-module I2C
+  RTC, plus the i.MX6's SNVS, we don't need a 3rd RTC on the carrier)
+- Silicon Image SiI9022 HDMI transmitter (driver depends on MXS framebuffer
+  present on i.MX2/6SX/SL/UL, but not i.MX6Q/D/DL/S)
+- Freescale MMA7660 I2C accelerometer (found only old out-of-tree non-DT
+  code)
+- Linear Technology LTC1760 I2C battery charger (nothing found)
+
+diff --git a/arch/arm/configs/lec-imx6_defconfig b/arch/arm/configs/lec-imx6_defconfig
+index b4ad193..c801915 100644
+--- a/arch/arm/configs/lec-imx6_defconfig
++++ b/arch/arm/configs/lec-imx6_defconfig
+@@ -87,6 +87,7 @@ CONFIG_MTD_BLOCK=y
+ CONFIG_MTD_M25P80=y
+ CONFIG_MTD_SPI_NOR=y
+ CONFIG_BLK_DEV_LOOP=m
++CONFIG_EEPROM_AT24=m
+ # CONFIG_SCSI_PROC_FS is not set
+ CONFIG_BLK_DEV_SD=y
+ CONFIG_SCSI_SCAN_ASYNC=y
+@@ -154,6 +155,8 @@ CONFIG_INPUT_EVDEV=m
+ # CONFIG_KEYBOARD_ATKBD is not set
+ CONFIG_KEYBOARD_GPIO=y
+ # CONFIG_INPUT_MOUSE is not set
++CONFIG_INPUT_TOUCHSCREEN=y
++CONFIG_TOUCHSCREEN_ADS7846=m
+ # CONFIG_SERIO is not set
+ # CONFIG_LEGACY_PTYS is not set
+ # CONFIG_DEVKMEM is not set
+@@ -168,6 +171,7 @@ CONFIG_SPI_IMX=y
+ CONFIG_GPIO_SYSFS=y
+ CONFIG_GPIO_PCA953X=y
+ CONFIG_GPIO_PCA953X_IRQ=y
++CONFIG_GPIO_PCF857X=y
+ CONFIG_POWER_SUPPLY=y
+ CONFIG_POWER_RESET=y
+ CONFIG_POWER_RESET_SYSCON_POWEROFF=y
+@@ -221,12 +225,15 @@ CONFIG_SND=y
+ CONFIG_SND_SOC=y
+ CONFIG_SND_SOC_FSL_ASRC=y
+ CONFIG_SND_IMX_SOC=y
++CONFIG_SND_SOC_EUKREA_TLV320=m
++CONFIG_SND_SOC_IMX_SGTL5000=m
+ CONFIG_SND_SOC_IMX_SPDIF=y
+ CONFIG_SND_SOC_IMX_HDMI=y
+ CONFIG_HID_MULTITOUCH=m
+ CONFIG_USB=y
+ CONFIG_USB_OTG=y
+ CONFIG_USB_EHCI_HCD=y
++CONFIG_USB_ACM=m
+ CONFIG_USB_STORAGE=y
+ CONFIG_USB_CHIPIDEA=y
+ CONFIG_USB_CHIPIDEA_UDC=y
+-- 
+2.1.4
+

@@ -1,0 +1,26 @@
+From c460e2da289e62c8b9de2416fab0bc5d7b4a7fc1 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Fri, 10 Jun 2016 16:37:40 +0200
+Subject: We don't need stdout-path in chosen node.
+
+U-Boot sets "console=ttymxc0,115200" in the 'params' variable, which is
+handed over as kernel boot parameters. This method allows easy changing
+without compiling a new DTB. Comment out 'stdout-path'.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 4e04761..dcab938 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -49,7 +49,8 @@
+ 	};
+ 
+ 	chosen {
+-		stdout-path = &uart1;
++		/* U-Boot provides this via "console=..." in the 'params' variable. */
++		//stdout-path = &uart1;
+ 	};
+ 
+ 	/* The LEC-Base carriers don't have any LEDs, just show how it's done. */
+-- 
+2.1.4
+

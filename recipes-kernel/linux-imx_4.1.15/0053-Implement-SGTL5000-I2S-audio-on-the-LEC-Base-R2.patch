@@ -1,0 +1,162 @@
+From b228bc3d64b5297d9b20a402d1d2738b7f5c9685 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Wed, 8 Jan 2014 18:53:22 +0100
+Subject: Implement SGTL5000 I2S audio on the LEC-Base R2.
+
+We have a Freescale SGTL5000 I2S audio codec on the LEC-Base R2 carrier
+instead of a Wolfson WM8962, and it has much less connectors.
+
+We need to define two regulators instead of one to make the driver work
+properly, but they're not controllable via GPIO. Also change the node name
+from a confusigly unspecific "sound" to the clearer "sound-i2s", this is
+seen by user space (e.g. PulseAudio config) and the other nodes are named
+"sound-hdmi" and "sound-spdif".
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 0fb3efc..74a3e37 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -97,12 +97,27 @@
+ 			regulator-boot-on;
+ 		};
+ 
+-		reg_audio: regulator@2 {
++		/* Power supplies on the LEC-Base R2 carrier. They cannot be
++		 * controlled, but the SGTL5000 driver won't work without
++		 * regulator definitions. */
++		reg_base_1v8: regulator@18 {
+ 			compatible = "regulator-fixed";
+-			reg = <2>;
+-			regulator-name = "wm8962-supply";
+-			gpio = <&gpio4 10 0>;
+-			enable-active-high;
++			reg = <18>;
++			regulator-name = "base_1v8";
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <1800000>;
++			regulator-boot-on;
++			regulator-always-on;
++		};
++
++		reg_base_3v3: regulator@33 {
++			compatible = "regulator-fixed";
++			reg = <33>;
++			regulator-name = "base_3v3";
++			regulator-min-microvolt = <3300000>;
++			regulator-max-microvolt = <3300000>;
++			regulator-boot-on;
++			regulator-always-on;
+ 		};
+ 	};
+ 
+@@ -141,30 +156,20 @@
+ 		};
+ 	};
+ 
+-	sound {
+-		compatible = "fsl,imx6q-sabresd-wm8962",
+-			   "fsl,imx-audio-wm8962";
+-		model = "wm8962-audio";
+-		cpu-dai = <&ssi2>;
++	sound-i2s {	/* Audio codec on LEC-Base R2 carrier */
++		compatible = "fsl,imx-audio-sgtl5000";
++		model = "imx-sgtl5000";
++		ssi-controller = <&ssi2>;
++		mux-int-port = <2>;
++		mux-ext-port = <3>;
+ 		audio-codec = <&codec>;
+ 		asrc-controller = <&asrc>;
+ 		audio-routing =
+-			"Headphone Jack", "HPOUTL",
+-			"Headphone Jack", "HPOUTR",
+-			"Ext Spk", "SPKOUTL",
+-			"Ext Spk", "SPKOUTR",
+-			"AMIC", "MICBIAS",
+-			"IN3R", "AMIC",
+-			"DMIC", "MICBIAS",
+-			"DMICDAT", "DMIC",
+-			"CPU-Playback", "ASRC-Playback",
+-			"Playback", "CPU-Playback",
+-			"ASRC-Capture", "CPU-Capture",
+-			"CPU-Capture", "Capture";
+-		mux-int-port = <2>;
+-		mux-ext-port = <3>;
+-		hp-det-gpios = <&gpio7 8 1>;
+-		mic-det-gpios = <&gpio1 9 1>;
++			"MIC_IN", "Mic Jack",
++			"Mic Jack", "Mic Bias",
++			"LINE_IN", "Line In Jack",
++		//	"Headphone Jack", "HP_OUT",
++			"Line Out Jack", "LINE_OUT";
+ 	};
+ 
+ 	sound-hdmi {
+@@ -257,7 +262,7 @@
+ 	};
+ };
+ 
+-&audmux {
++&audmux {	/* SMARC I2S0 (instead of SPI0) */
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_audmux>;
+ 	status = "okay";
+@@ -382,28 +387,16 @@
+ 		reg = <0x58>;
+ 	};
+ 
+-	codec: wm8962@1a {
+-		compatible = "wlf,wm8962";
+-		reg = <0x1a>;
+-		clocks = <&clks IMX6QDL_CLK_CKO>;
+-		DCVDD-supply = <&reg_audio>;
+-		DBVDD-supply = <&reg_audio>;
+-		AVDD-supply = <&reg_audio>;
+-		CPVDD-supply = <&reg_audio>;
+-		MICVDD-supply = <&reg_audio>;
+-		PLLVDD-supply = <&reg_audio>;
+-		SPKVDD1-supply = <&reg_audio>;
+-		SPKVDD2-supply = <&reg_audio>;
+-		gpio-cfg = <
+-			0x0000 /* 0:Default */
+-			0x0000 /* 1:Default */
+-			0x0013 /* 2:FN_DMICCLK */
+-			0x0000 /* 3:Default */
+-			0x8014 /* 4:FN_DMICCDAT */
+-			0x0000 /* 5:Default */
+-		>;
+-		amic-mono;
+-       };
++	codec: sgtl5000@0a {		/* Audio codec on LEC-Base R2 carrier */
++		compatible = "fsl,sgtl5000";
++		reg = <0x0a>;
++		clocks = <&clks IMX6QDL_CLK_CKO>; /* SMARC AUDIO_MCK, actually unused on carrier */
++		VDDA-supply = <&reg_base_3v3>;
++		VDDIO-supply = <&reg_base_1v8>;
++		VDDD-supply = <&reg_base_1v8>;
++		micbias-resistor-k-ohms = <4>;
++		micbias-voltage-m-volts = <1250>;
++	};
+ 
+ 	ov564x: ov564x@3c {
+ 		compatible = "ovti,ov564x";
+@@ -612,7 +605,7 @@
+ 		};
+ 
+ 		pinctrl_audmux: audmuxgrp {
+-			fsl,pins = <
++			fsl,pins = <	/* SMARC I2S0 (instead of SPI0) */
+ 				MX6QDL_PAD_CSI0_DAT7__AUD3_RXD		0x130b0
+ 				MX6QDL_PAD_CSI0_DAT4__AUD3_TXC		0x130b0
+ 				MX6QDL_PAD_CSI0_DAT5__AUD3_TXD		0x110b0
+@@ -951,7 +944,7 @@
+ 	status = "okay";
+ };
+ 
+-&ssi2 {
++&ssi2 {		/* SMARC I2S0 (instead of SPI0) */
+ 	status = "okay";
+ };
+ 
+-- 
+2.1.4
+

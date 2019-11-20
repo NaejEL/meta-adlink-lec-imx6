@@ -1,0 +1,93 @@
+From 7296e4ff69957aca62f067f402f3c56975fcd70a Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Sun, 29 Jun 2014 00:21:31 +0200
+Subject: Implement phase-shifted SPI clock during data input.
+
+During the data-out phase of an SPI transfer clock and data both originate
+from the i.MX6, both pass the same levelshifters etc. and arrive at the SPI
+flash chip synchronously. During the data-in phase the flash chip reacts to
+the slightly delayed clock edges by outputting data, which gets delayed a
+second time on its way back, where it is no longer synchronous to the
+i.MX6's original clock.
+
+At speeds > approx. 15 MHz this seems to become a problem, the i.MX6 cannot
+reliably read the SPI flash.
+
+A workaround is to use the ECSPI controller's SCLK_POL, SCLK_PHA and
+SCLK_CTL flags to phase-shift the clock and compensate for the delay. This
+is done only during the data input phase, i.e. the flags have to be changed
+after command byte and address have been sent, during CS is still being
+pulled low. The shift is always half a clock cycle and only works for fast
+frequencies (>= 30 MHz) when half a cycle roughly equals the delay to be
+compensated. This nasty procedure also is possible in PIO mode only.
+
+This patch introduces a new DT property "fsl,clk-workaround-freq". If
+present the workaround will be active at the specified or faster SPI
+frequencies. Setting the property to a non-<0> value also disables DMA.
+
+I don't know why the i.MX6 requires such an ugly workaround, whereas e.g.
+Intel BayTrail works fine in exactly the same circuit. It doesn't appear to
+be a driver flaw as U-Boot has the same problem.
+
+diff --git a/Documentation/devicetree/bindings/spi/fsl-imx-cspi.txt b/Documentation/devicetree/bindings/spi/fsl-imx-cspi.txt
+index 523341a..30d9e8c 100644
+--- a/Documentation/devicetree/bindings/spi/fsl-imx-cspi.txt
++++ b/Documentation/devicetree/bindings/spi/fsl-imx-cspi.txt
+@@ -21,6 +21,13 @@ See the clock consumer binding,
+ 		Documentation/devicetree/bindings/dma/dma.txt
+ - dma-names: DMA request names should include "tx" and "rx" if present.
+ 
++Optional properties:
++- fsl,clk-workaround-freq : While the SPI clock is at least as fast as the given
++	<value in Hz> the clock will get phase-shifted during the data-in phase
++	to compensate for propagation delays (or a flaw in the iMX6??). Setting
++	this property to a non-<0> value will also disable DMA as the workaround
++	is only possible in PIO mode.
++
+ Example:
+ 
+ ecspi@70010000 {
+diff --git a/drivers/spi/spi-imx.c b/drivers/spi/spi-imx.c
+index 8c0e0cc..8c92bc3 100644
+--- a/drivers/spi/spi-imx.c
++++ b/drivers/spi/spi-imx.c
+@@ -97,6 +97,7 @@ struct spi_imx_data {
+ 	struct clk *clk_per;
+ 	struct clk *clk_ipg;
+ 	unsigned long spi_clk;
++	unsigned int clk_workaround_freq;
+ 
+ 	unsigned int count;
+ 	void (*tx)(struct spi_imx_data *);
+@@ -800,6 +801,11 @@ static int spi_imx_setupxfer(struct spi_device *spi,
+ 	if (!config.bpw)
+ 		config.bpw = spi->bits_per_word;
+ 
++	/* workaround phase-shifting clock during data input */
++	if (t && !t->tx_buf && spi_imx->clk_workaround_freq
++	    && config.speed_hz >= spi_imx->clk_workaround_freq)
++		config.mode ^= SPI_CPOL | SPI_CPHA;
++
+ 	/* Initialize the functions for transfer */
+ 	if (config.bpw <= 8) {
+ 		spi_imx->rx = spi_imx_buf_rx_u8;
+@@ -1208,6 +1214,8 @@ static int spi_imx_probe(struct platform_device *pdev)
+ 		}
+ 	}
+ 
++	of_property_read_u32(np, "fsl,clk-workaround-freq", &spi_imx->clk_workaround_freq);
++
+ 	spi_imx->bitbang.chipselect = spi_imx_chipselect;
+ 	spi_imx->bitbang.setup_transfer = spi_imx_setupxfer;
+ 	spi_imx->bitbang.txrx_bufs = spi_imx_transfer;
+@@ -1269,6 +1277,7 @@ static int spi_imx_probe(struct platform_device *pdev)
+ 	 */
+ 	if ((spi_imx->devtype_data == &imx51_ecspi_devtype_data
+ 	    || spi_imx->devtype_data == &imx6ul_ecspi_devtype_data)
++	    && !spi_imx->clk_workaround_freq /* workaround requires PIO */
+ 	    && spi_imx_sdma_init(&pdev->dev, spi_imx, master, res))
+ 		dev_err(&pdev->dev, "dma setup error,use pio instead\n");
+ 
+-- 
+2.1.4
+

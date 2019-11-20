@@ -1,0 +1,76 @@
+From e1c2b6c8f494aaa2bd4f3092b73e1ad42a3b6702 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Fri, 31 Oct 2014 21:13:26 +0100
+Subject: Revert "ENGR00299600 hdmi:yocto gui can not show to some TV on ard
+ board"
+
+Original commit message by Sandor Yu <R01008@freescale.com>:
+
+    For i.MX6 ARD board, the board not support read EDID from TV, so
+    HDMI driver will create a default support mode list when system
+    bootup.
+    Because yocto xserver can not get video mode information from
+    framebuffer now, and xserver will set default video mode XGA to
+    framebuffer, but XGA mode is not support by hdmi.
+
+    Remove XGA and SXGA from default support list.
+    HDMI driver will find a nearest match video mode in support list.
+    It is VGA mode. HDMI support VGA mode well.
+    Issue is fixed.
+
+The LEC-iMX6 does support reading EDID on HDMI. If we can't get valid data
+from a monitor it is usually because Freescale's driver is limited to
+parsing the CEA (Consumer Electronics Association) EDID extension, which
+e.g. (older) DVI monitors (via DVI->HDMI adapters) don't implement. In this
+light I think 1024x768 and 1280x1024 should be valid choices.
+
+diff --git a/drivers/video/fbdev/mxc/mxc_hdmi.c b/drivers/video/fbdev/mxc/mxc_hdmi.c
+index 7855b91..2a23440 100644
+--- a/drivers/video/fbdev/mxc/mxc_hdmi.c
++++ b/drivers/video/fbdev/mxc/mxc_hdmi.c
+@@ -91,6 +91,19 @@ static const struct fb_videomode vga_mode = {
+ 	FB_VMODE_NONINTERLACED | FB_VMODE_ASPECT_4_3, FB_MODE_IS_VESA,
+ };
+ 
++static const struct fb_videomode xga_mode = {
++	/* 13 1024x768-60 VESA */
++	NULL, 60, 1024, 768, 15384, 160, 24, 29, 3, 136, 6,
++	0, FB_VMODE_NONINTERLACED, FB_MODE_IS_VESA
++};
++
++static const struct fb_videomode sxga_mode = {
++	/* 20 1280x1024-60 VESA */
++	NULL, 60, 1280, 1024, 9259, 248, 48, 38, 1, 112, 3,
++	FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
++	FB_VMODE_NONINTERLACED, FB_MODE_IS_VESA
++};
++
+ enum hdmi_datamap {
+ 	RGB444_8B = 0x01,
+ 	RGB444_10B = 0x03,
+@@ -1838,6 +1851,11 @@ static void  mxc_hdmi_default_modelist(struct mxc_hdmi *hdmi)
+ 
+ 	fb_destroy_modelist(&hdmi->fbi->modelist);
+ 
++	/*Add XGA and SXGA to default modelist */
++	fb_add_videomode(&vga_mode, &hdmi->fbi->modelist);
++	fb_add_videomode(&xga_mode, &hdmi->fbi->modelist);
++	fb_add_videomode(&sxga_mode, &hdmi->fbi->modelist);
++
+ 	/*Add all no interlaced CEA mode to default modelist */
+ 	for (i = 0; i < ARRAY_SIZE(mxc_cea_mode); i++) {
+ 		mode = &mxc_cea_mode[i];
+@@ -2593,6 +2611,10 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
+ 			fb_add_videomode(mode, &hdmi->fbi->modelist);
+ 	}
+ 
++	/*Add XGA and SXGA to default modelist */
++	fb_add_videomode(&xga_mode, &hdmi->fbi->modelist);
++	fb_add_videomode(&sxga_mode, &hdmi->fbi->modelist);
++
+ 	console_unlock();
+ 
+ 	/* Find a nearest mode in default modelist */
+-- 
+2.1.4
+

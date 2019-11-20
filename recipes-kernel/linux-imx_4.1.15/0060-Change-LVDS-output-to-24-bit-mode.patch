@@ -1,0 +1,33 @@
+From fd2f8acd276b10761128106efd23a52c83b131b6 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Fri, 14 Nov 2014 14:21:39 +0100
+Subject: Change LVDS output to 24 bit mode.
+
+All LVDS panels we happen to have lying around use a 24 bit protocol so
+switch (physical) LVDS output from 18 to 24 bits per pixel.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 8702806..0a13d00 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -244,7 +244,7 @@
+ 		         * Solo/DL: IPU1, fb2 competing with par. RGB, no overlay */
+ 		compatible = "fsl,mxc_sdc_fb";
+ 		disp_dev = "ldb";
+-		interface_pix_fmt = "RGB666";
++		interface_pix_fmt = "RGB24";
+ 		default_bpp = <24>;
+ 		int_clk = <0>;
+ 		late_init = <0>;
+@@ -950,7 +950,7 @@
+ 
+ 	lvds-channel@0 {
+ 		fsl,data-mapping = "spwg"; /* spwg or jeida (see chapter "Bit Mapping" in i.MX6 Reference Manual) */
+-		fsl,data-width = <18>;
++		fsl,data-width = <24>;
+ 		primary;
+ 		status = "okay";
+ 
+-- 
+2.1.4
+

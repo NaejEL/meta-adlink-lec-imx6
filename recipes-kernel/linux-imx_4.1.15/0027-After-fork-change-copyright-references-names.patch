@@ -1,0 +1,84 @@
+From d9f0e6f857e1a57067eda165833fc51770c98830 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Wed, 9 Oct 2013 18:20:03 +0200
+Subject: After fork change copyright, references, names.
+
+- Add ADLINK copyright lines.
+- Change pinctrl node name.
+- Change #included .dtsi file names.
+- Change board names and 'compatible' statements.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 44e265d..785963e 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -1,4 +1,5 @@
+ /*
++ * Copyright 2014-2016 LiPPERT ADLINK Technology GmbH
+  * Copyright 2012-2015 Freescale Semiconductor, Inc.
+  * Copyright 2011 Linaro Ltd.
+  *
+@@ -602,7 +603,7 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_hog>;
+ 
+-	imx6qdl-sabresd {
++	lec-imx6 {
+ 		pinctrl_hog: hoggrp {
+ 			fsl,pins = <
+ 				MX6QDL_PAD_NANDF_D0__GPIO2_IO00 0x80000000
+diff --git a/arch/arm/boot/dts/lec-imx6q.dts b/arch/arm/boot/dts/lec-imx6q.dts
+index a63e1b6..ebeb6f5 100644
+--- a/arch/arm/boot/dts/lec-imx6q.dts
++++ b/arch/arm/boot/dts/lec-imx6q.dts
+@@ -1,5 +1,6 @@
+ /*
+- * Copyright 2012=2015 Freescale Semiconductor, Inc.
++ * Copyright 2014-2016 LiPPERT ADLINK Technology GmbH
++ * Copyright 2012-2015 Freescale Semiconductor, Inc.
+  * Copyright 2011 Linaro Ltd.
+  *
+  * The code contained herein is licensed under the GNU General Public
+@@ -13,11 +14,11 @@
+ /dts-v1/;
+ 
+ #include "imx6q.dtsi"
+-#include "imx6qdl-sabresd.dtsi"
++#include "lec-imx6.dtsi"
+ 
+ / {
+-	model = "Freescale i.MX6 Quad SABRE Smart Device Board";
+-	compatible = "fsl,imx6q-sabresd", "fsl,imx6q";
++	model = "ADLINK LEC-iMX6 (Quad/Dual) SMARC module";
++	compatible = "adlink,lec-imx6", "fsl,imx6q";
+ };
+ 
+ &battery {
+diff --git a/arch/arm/boot/dts/lec-imx6s.dts b/arch/arm/boot/dts/lec-imx6s.dts
+index 52ebc68..8b9e30c 100644
+--- a/arch/arm/boot/dts/lec-imx6s.dts
++++ b/arch/arm/boot/dts/lec-imx6s.dts
+@@ -1,4 +1,5 @@
+ /*
++ * Copyright (C) 2014-2016 LiPPERT ADLINK Technology GmbH
+  * Copyright (C) 2013-2015 Freescale Semiconductor, Inc.
+  *
+  * This program is free software; you can redistribute it and/or modify
+@@ -9,11 +10,11 @@
+ /dts-v1/;
+ 
+ #include "imx6dl.dtsi"
+-#include "imx6qdl-sabresd.dtsi"
++#include "lec-imx6.dtsi"
+ 
+ / {
+-	model = "Freescale i.MX6 DualLite SABRE Smart Device Board";
+-	compatible = "fsl,imx6dl-sabresd", "fsl,imx6dl";
++	model = "ADLINK LEC-iMX6 (Solo/DualLite) SMARC module";
++	compatible = "adlink,lec-imx6", "fsl,imx6dl";
+ };
+ 
+ &battery {
+-- 
+2.1.4
+

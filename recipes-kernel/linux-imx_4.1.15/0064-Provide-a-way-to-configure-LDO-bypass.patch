@@ -1,0 +1,71 @@
+From ed26b22fdb4e09eb180734f6f0297f205df72a78 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Wed, 12 Mar 2014 21:38:47 +0100
+Subject: Provide a way to configure LDO bypass.
+
+Statement from our FAE: "It's sensible to use the internal LDOs because of
+their filtering effect on the voltages. It's also possible to bypass the
+LDOs, this will save some power. However it isn't recommended unless power
+consumption has absolute priority."
+
+On the other hand Freescale's reference boards do enable LDO bypass per
+default. But this requires continuous I2C communication with the PMIC; if
+I2C2 is broken booting Linux will hang when initializing the "Galcore" GPU
+driver.
+
+The problems old LEC-iMX6 A1 revisions had are long solved, however bugs on
+(custom) SMARC carriers might block I2C2, so it's still useful to be able to
+disable LDO bypass. Freescale provides a seperate DTS, this patch introduces
+a commented #define instead.
+
+Note that if talking to the PMIC isn't possible it might also be necessary
+to comment out vin-supply of reg_smarc_usb1.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index e23de01..f7dcea2 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -18,6 +18,17 @@
+ #define CONFIG_SER_CAMERA	3c /* I2C addr of serial camera, hex without "0x" */
+ //#define CONFIG_PAR_CAMERA	3c /* I2C addr of parallel camera */
+ 
++/* The on-module Freescale PF0100 PMIC provides VDD_ARM_IN, VDD_SOC_IN to the
++ * on-SoC Anatop LDOs, which then generate VDD_ARM (CPU cores), VDD_PU
++ * (GPU/VPU), VDD_SOC (the rest). To save power clock and voltage need to vary
++ * according to the workload.
++ * Normal: PMIC provides fixed voltage, internal LDO lowers voltage further to
++ *         required value, depending on clock frequency.
++ * LDO bypass: PMIC (switched!) provides variable voltage directly, controlled
++ *             via I2C; internal LDOs bridged (FETs permanently on).
++ * Bypassing saves power, but requires steady communication on i2c2 to work. */
++#define LDO_BYPASS	1
++
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ #define __0x(X) 0x##X	/* prefix hex digits with "0x" */
+@@ -307,8 +318,13 @@
+ #endif
+ 
+ &cpu0 {
++#if LDO_BYPASS
+ 	arm-supply = <&sw1a_reg>;
+ 	soc-supply = <&sw1c_reg>;
++#else
++	arm-supply = <&reg_arm>;
++	soc-supply = <&reg_soc>;
++#endif
+ };
+ 
+ &clks {
+@@ -385,7 +401,7 @@
+ };
+ 
+ &gpc {
+-	fsl,ldo-bypass = <1>;
++	fsl,ldo-bypass = <LDO_BYPASS>; /* U-Boot will check it and configure */
+ };
+ 
+ &dcic1 {
+-- 
+2.1.4
+

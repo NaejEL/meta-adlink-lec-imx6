@@ -1,0 +1,106 @@
+From 3160827af752fbe41c526f001228d69e9d59ddf9 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Fri, 31 Oct 2014 21:23:53 +0100
+Subject: Create DT option to make HDMI accept non-CEA modes from EDID.
+
+Freescale's i.MX6 HDMI driver reads a monitor's supported modes from its
+EDID data, but then drops all entries which are not also found in
+mxc_edid.c: mxc_cea_mode[], which contains a limited list of known CEA
+modes. From the remaining intersection the default video mode is chosen.
+
+If a monitor's native resolution is not in the driver's list it is rejected
+and you'll get only a similar mode with a blurry interpolated image. This
+patch implements a new Decice Tree option allowing to skip the 'mode known'
+check, sometimes allowing a crisp native resolution output. However
+unfortunately during our tests (on a 3.10 kernel) parallel RGB, which shared
+the same IPU with HDMI, then failed to work properly and we also experienced
+HDMI audio sounding badly distorted.
+
+Does this mean an i.MX6 hardware limitation is the reason why the driver
+chooses only a few known-good modes? Or is this just yet another bug in
+Freescale's driver? We'll default to disable the option in the DT so
+parallel RGB works. If someone needs only HDMI they can try to enable it
+for a better picture.
+
+In any case this option is only about the list of predefined modes chosen
+per default, you can always set any timing you'd like manually e.g. with
+fbset.
+
+Inspired by "mxc_hdmi: improve modesetting behaviour" by James Laird
+<jhl@mafipulation.org>, found at https://github.com/imx6-dongle/linux-imx
+/commit/6ea2512fe2a5f002fb05eed90240, which, among lots of other changes,
+unconditionally deleted the 'mode in list' check.
+
+diff --git a/Documentation/devicetree/bindings/video/mxc_hdmi_video.txt b/Documentation/devicetree/bindings/video/mxc_hdmi_video.txt
+index 4836da5..1f47477 100644
+--- a/Documentation/devicetree/bindings/video/mxc_hdmi_video.txt
++++ b/Documentation/devicetree/bindings/video/mxc_hdmi_video.txt
+@@ -10,6 +10,15 @@ Required properties:
+ Optional properties:
+ - fsl,hdcp: define the property in dts, hdmi driver will initalize for hdcp,
+   otherwise hdcp function will not supported.
++- fsl,allow-all-modes: do not only offer a limited set of video modes
++  (mxc_edid.c: mxc_cea_mode[]), but any non-interlaced mode found in a monitor's
++  EDID data. This option may be needed to accept the monitor's native resolution
++  and get a clear, uninterpolated image, but (at least on 3.10 kernels) we've
++  seen side effects of distorted HDMI audio and a parallel RGB interface sharing
++  an IPU with HDMI not working properly any more. We don't know if this is an
++  i.MX6 hardware limitation or a bug in Freescale's driver. This option is only
++  about the list of predefined modes chosen per default, you can always set any
++  timing manually e.g. with fbset.
+ 
+ Example:
+ 
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 785963e..63ae27f 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -355,6 +355,16 @@
+ &hdmi_video {
+ 	fsl,phy_reg_vlev = <0x0294>;
+ 	fsl,phy_reg_cksymtx = <0x800d>;
++	/* In the list of predefined video modes include any provided by the
++	 * monitor's EDID data instead of only a few found in mxc_edid.c:
++	 * mxc_cea_mode[].
++	 * With this enabled we got an HDMI TV's native resolution instead of a
++	 * blurry interpolated image. On the downside HDMI audio sounded
++	 * distorted and parallel RGB, which shared the same i.MX6 IPU, then
++	 * failed to work properly. We don't know if this is an i.MX6 hardware
++	 * limitation or a bug in Freescale's driver. Regardless of this option
++	 * fbset can set any timing manually. */
++	//fsl,allow-all-modes;
+ 	status = "okay";
+ };
+ 
+diff --git a/drivers/video/fbdev/mxc/mxc_hdmi.c b/drivers/video/fbdev/mxc/mxc_hdmi.c
+index 2a23440..ec3f93e 100644
+--- a/drivers/video/fbdev/mxc/mxc_hdmi.c
++++ b/drivers/video/fbdev/mxc/mxc_hdmi.c
+@@ -182,6 +182,7 @@ struct mxc_hdmi {
+ 	struct fb_videomode default_mode;
+ 	struct fb_videomode previous_non_vga_mode;
+ 	bool requesting_vga_for_initialization;
++	bool allow_all_modes; /* allow modes not listed in mxc_cea_mode[] */
+ 
+ 	int *gpr_base;
+ 	int *gpr_hdmi_base;
+@@ -1811,7 +1812,7 @@ static void mxc_hdmi_edid_rebuild_modelist(struct mxc_hdmi *hdmi)
+ 		mode = &hdmi->fbi->monspecs.modedb[i];
+ 
+ 		if (!(mode->vmode & FB_VMODE_INTERLACED) &&
+-				(mxc_edid_mode_to_vic(mode) != 0)) {
++		    (hdmi->allow_all_modes || mxc_edid_mode_to_vic(mode))) {
+ 
+ 			dev_dbg(&hdmi->pdev->dev, "Added mode %d:", i);
+ 			dev_dbg(&hdmi->pdev->dev,
+@@ -2477,6 +2478,7 @@ static void hdmi_get_of_property(struct mxc_hdmi *hdmi)
+ 	hdmi->phy_config.reg_cksymtx = phy_reg_cksymtx;
+ 	hdmi->phy_config.reg_vlev = phy_reg_vlev;
+ 
++	hdmi->allow_all_modes = of_property_read_bool(np, "fsl,allow-all-modes");
+ }
+ 
+ /* HDMI Initialization Step A */
+-- 
+2.1.4
+

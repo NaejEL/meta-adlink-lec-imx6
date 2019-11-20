@@ -1,0 +1,39 @@
+From be30945c986888ca9c52ce8f0f67058e71e135e9 Mon Sep 17 00:00:00 2001
+From: Troy Kisky <troy.kisky@boundarydevices.com>
+Date: Fri, 24 Jan 2014 12:23:07 -0700
+Subject: pci-imx6: add gen 2 timeout message
+
+
+diff --git a/drivers/pci/host/pci-imx6.c b/drivers/pci/host/pci-imx6.c
+index 36d9fb6..585d221 100644
+--- a/drivers/pci/host/pci-imx6.c
++++ b/drivers/pci/host/pci-imx6.c
+@@ -578,19 +578,20 @@ static int imx6_pcie_start_link(struct pcie_port *pp)
+ 	writel(tmp, pp->dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
+ 
+ 	count = 2000;
+-	while (count--) {
++	while (1) {
+ 		tmp = readl(pp->dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
+ 		/* Test if the speed change finished. */
+ 		if (!(tmp & PORT_LOGIC_SPEED_CHANGE))
+ 			break;
++		if (count-- == 0) {
++			dev_err(pp->dev, "Change to gen 2 speed timeout\n");
++			return -EINVAL;
++		}
+ 		udelay(10);
+ 	}
+ 
+ 	/* Make sure link training is finished as well! */
+-	if (count)
+-		ret = imx6_pcie_wait_for_link(pp);
+-	else
+-		ret = -EINVAL;
++	ret = imx6_pcie_wait_for_link(pp);
+ 
+ 	if (ret) {
+ 		dev_err(pp->dev, "Failed to bring link up!\n");
+-- 
+2.1.4
+

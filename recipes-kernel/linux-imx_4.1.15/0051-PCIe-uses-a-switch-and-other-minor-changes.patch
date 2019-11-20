@@ -1,0 +1,79 @@
+From 37b8c4429836f638ae5edfea21a661c6eaf814c7 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Wed, 8 Jan 2014 17:53:32 +0100
+Subject: PCIe uses a switch, and other minor changes.
+
+- Optional PLX PEX8605 makes 3 PCIe x1 lanes from 1 and may be tuned via
+  I2C.
+- We don't have a GPIO for power gating.
+- Instead we have one for wakeup, but Freescale's driver doesn't implement
+  it. It is possible (tested!) to abuse a gpio-key as workaround, however.
+- Same reset GPIO, but wasn't initialized properly (active low).
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 765db68..f0b1963 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -105,19 +105,6 @@
+ 			enable-active-high;
+ 		};
+ 
+-		reg_pcie: regulator@3 {
+-			compatible = "regulator-fixed";
+-			reg = <3>;
+-			pinctrl-names = "default";
+-			pinctrl-0 = <&pinctrl_pcie_reg>;
+-			regulator-name = "MPCIE_3V3";
+-			regulator-min-microvolt = <3300000>;
+-			regulator-max-microvolt = <3300000>;
+-			gpio = <&gpio3 19 0>;
+-			regulator-always-on;
+-			enable-active-high;
+-		};
+-
+ 		reg_mipi_dsi_pwr_on: mipi_dsi_pwr_on {
+ 			compatible = "regulator-fixed";
+ 			regulator-name = "mipi_dsi_pwr_on";
+@@ -404,6 +391,11 @@
+ 		reg = <0x51>;
+ 	};
+ 
++	pex8605@58 {				/* optional PCIe switch */
++		compatible = "plx,pex8605"; /* guessing, no driver found */
++		reg = <0x58>;
++	};
++
+ 	codec: wm8962@1a {
+ 		compatible = "wlf,wm8962";
+ 		reg = <0x1a>;
+@@ -795,13 +787,8 @@
+ 
+ 		pinctrl_pcie: pciegrp {
+ 			fsl,pins = <
+-				MX6QDL_PAD_GPIO_17__GPIO7_IO12	0x1b0b0
+-			>;
+-		};
+-
+-		pinctrl_pcie_reg: pciereggrp {
+-			fsl,pins = <
+-				MX6QDL_PAD_EIM_D19__GPIO3_IO19	0x1b0b0
++				MX6QDL_PAD_GPIO_17__GPIO7_IO12		0x1b0b0 /* PCIE_RST_B */
++				MX6QDL_PAD_CSI0_DATA_EN__GPIO5_IO20	0x1b0b0 /* PCIE_WAKE_B */
+ 			>;
+ 		};
+ 
+@@ -970,7 +957,10 @@
+ &pcie {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_pcie>;
+-	reset-gpio = <&gpio7 12 0>;
++	reset-gpio = <&gpio7 12 GPIO_ACTIVE_LOW>; /* PCIE_RST_B */
++	/* Next line has no effect: half-implemented in older kernels, Freescale
++	 * now removed code completely; gpio-key can serve as workaround. */
++	wake-up-gpio = <&gpio5 20 GPIO_ACTIVE_LOW>; /* PCIE_WAKE_B */
+ 	status = "okay";
+ };
+ 
+-- 
+2.1.4
+

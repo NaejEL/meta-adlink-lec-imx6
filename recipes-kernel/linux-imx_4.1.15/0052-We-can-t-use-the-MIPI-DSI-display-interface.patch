@@ -1,0 +1,58 @@
+From 691e57a558cbc4eb9de48b2142a7c337d92134c7 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Wed, 8 Jan 2014 18:36:14 +0100
+Subject: We can't use the MIPI-DSI display interface.
+
+Just drop everything MIPI-DSI related.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index f0b1963..0fb3efc 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -104,13 +104,6 @@
+ 			gpio = <&gpio4 10 0>;
+ 			enable-active-high;
+ 		};
+-
+-		reg_mipi_dsi_pwr_on: mipi_dsi_pwr_on {
+-			compatible = "regulator-fixed";
+-			regulator-name = "mipi_dsi_pwr_on";
+-			gpio = <&gpio6 14 0>;
+-			enable-active-high;
+-		};
+ 	};
+ 
+ 	gpio-keys {
+@@ -262,13 +255,6 @@
+ 		compatible = "fsl,mxc_v4l2_output";
+ 		status = "okay";
+ 	};
+-
+-	mipi_dsi_reset: mipi-dsi-reset {
+-		compatible = "gpio-reset";
+-		reset-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
+-		reset-delay-us = <50>;
+-		#reset-cells = <0>;
+-	};
+ };
+ 
+ &audmux {
+@@ -945,15 +931,6 @@
+ 	lanes = <2>;
+ };
+ 
+-&mipi_dsi {
+-	dev_id = <0>;
+-	disp_id = <1>;
+-	lcd_panel = "TRULY-WVGA";
+-	disp-power-on-supply = <&reg_mipi_dsi_pwr_on>;
+-	resets = <&mipi_dsi_reset>;
+-	status = "okay";
+-};
+-
+ &pcie {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_pcie>;
+-- 
+2.1.4
+

@@ -1,0 +1,103 @@
+From 0682d4b18cf8d17abdd4e318406514d2afe8ef5a Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Mon, 30 Mar 2015 15:52:56 +0200
+Subject: Work around OV564x cameras blocking I2C bus.
+
+Whenever the Ovti OV564x camera chip exits Software Power Down, i.e. bit 6
+of reg 0x3008 (SYSTEM CONTROL00) is changed 1->0, for some reason the I2C
+bus gets blocked. The next transfer fails, even if aimed at a different
+device (on the same bus).
+
+As a workaround issue a dummy read immediately afterwards, any following
+I2C access will then be fine again.
+
+diff --git a/drivers/media/platform/mxc/capture/mxc_v4l2_capture.h b/drivers/media/platform/mxc/capture/mxc_v4l2_capture.h
+index f671775..3534d36 100644
+--- a/drivers/media/platform/mxc/capture/mxc_v4l2_capture.h
++++ b/drivers/media/platform/mxc/capture/mxc_v4l2_capture.h
+@@ -239,6 +239,7 @@ struct sensor_data {
+ 	struct v4l2_pix_format pix;
+ 	struct v4l2_captureparm streamcap;
+ 	bool on;
++	bool sw_power_down; /* mirrors bit 6 of SYSTEM CONTROL00 reg */
+ 
+ 	/* control settings */
+ 	int brightness;
+diff --git a/drivers/media/platform/mxc/capture/ov5640.c b/drivers/media/platform/mxc/capture/ov5640.c
+index ec8b809..f4cad94 100644
+--- a/drivers/media/platform/mxc/capture/ov5640.c
++++ b/drivers/media/platform/mxc/capture/ov5640.c
+@@ -678,6 +678,20 @@ static s32 ov5640_write_reg(u16 reg, u8 val)
+ 		return -1;
+ 	}
+ 
++	/* Weird issue: whenever the OV564x exits Software Power Down, i.e.
++	 * bit 6 of reg 0x3008 (SYSTEM CONTROL00) is changed 1->0, somehow the
++	 * I2C bus gets blocked. The next transfer fails, even if addressed
++	 * at a different device (on the same bus).
++	 * Workaround: issue a dummy read immediately afterwards, the following
++	 * I2C access will be fine again. */
++	if (reg == 0x3008) { /* SYSTEM CONTROL00 */
++		bool new_power_down = val & 0x40;
++		if (ov5640_data.sw_power_down && !new_power_down)
++			/* dummy read, is allowed to fail */
++			i2c_master_recv(ov5640_data.i2c_client, au8Buf, 1);
++		ov5640_data.sw_power_down = new_power_down;
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/media/platform/mxc/capture/ov5640_mipi.c b/drivers/media/platform/mxc/capture/ov5640_mipi.c
+index 2dce407..9b4871f 100644
+--- a/drivers/media/platform/mxc/capture/ov5640_mipi.c
++++ b/drivers/media/platform/mxc/capture/ov5640_mipi.c
+@@ -786,6 +786,20 @@ static s32 ov5640_write_reg(u16 reg, u8 val)
+ 		return -1;
+ 	}
+ 
++	/* Weird issue: whenever the OV564x exits Software Power Down, i.e.
++	 * bit 6 of reg 0x3008 (SYSTEM CONTROL00) is changed 1->0, somehow the
++	 * I2C bus gets blocked. The next transfer fails, even if addressed
++	 * at a different device (on the same bus).
++	 * Workaround: issue a dummy read immediately afterwards, the following
++	 * I2C access will be fine again. */
++	if (reg == 0x3008) { /* SYSTEM CONTROL00 */
++		bool new_power_down = val & 0x40;
++		if (ov5640_data.sw_power_down && !new_power_down)
++			/* dummy read, is allowed to fail */
++			i2c_master_recv(ov5640_data.i2c_client, au8Buf, 1);
++		ov5640_data.sw_power_down = new_power_down;
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/media/platform/mxc/capture/ov5642.c b/drivers/media/platform/mxc/capture/ov5642.c
+index 4ce46c2..af512c6 100644
+--- a/drivers/media/platform/mxc/capture/ov5642.c
++++ b/drivers/media/platform/mxc/capture/ov5642.c
+@@ -3125,6 +3125,20 @@ static s32 ov5642_write_reg(u16 reg, u8 val)
+ 		return -1;
+ 	}
+ 
++	/* Weird issue: whenever the OV564x exits Software Power Down, i.e.
++	 * bit 6 of reg 0x3008 (SYSTEM CONTROL00) is changed 1->0, somehow the
++	 * I2C bus gets blocked. The next transfer fails, even if addressed
++	 * at a different device (on the same bus).
++	 * Workaround: issue a dummy read immediately afterwards, the following
++	 * I2C access will be fine again. */
++	if (reg == 0x3008) { /* SYSTEM CONTROL00 */
++		bool new_power_down = val & 0x40;
++		if (ov5642_data.sw_power_down && !new_power_down)
++			/* dummy read, is allowed to fail */
++			i2c_master_recv(ov5642_data.i2c_client, au8Buf, 1);
++		ov5642_data.sw_power_down = new_power_down;
++	}
++
+ 	return 0;
+ }
+ 
+-- 
+2.1.4
+

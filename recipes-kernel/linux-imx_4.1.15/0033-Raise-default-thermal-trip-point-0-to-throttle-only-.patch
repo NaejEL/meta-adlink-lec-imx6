@@ -1,0 +1,83 @@
+From 49a0e304d94f1e039a4b1e95270462be648a6f78 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Wed, 18 Nov 2015 13:41:27 +0100
+Subject: Raise default thermal trip point 0 to throttle only at 95 C.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Freescale currently configures the following thermal defaults:
+- At 85°C CPU temp (trip point 0) the 3D GPU clock is throttled to 1/64 and
+  CPU clock to 1/2 of normal speed.
+- Once the CPU cools by 10°C both clocks go back to normal.
+- If the CPU reaches 85 + 20 = 105°C (trip point 1) the system shuts down.
+  This '+ 20' default is now hardcoded, whereas older 3.10 kernels had
+  #defined a dedicated constant set to 100°C.
+
+However at 85°C ambient(!) the CPU temp will unavoidably be higher than
+that, and our climate chamber tests even run at 90°C ambient to have a
+safety margin. Therefore we raise default trip point 0: now the i.MX6 will
+throttle only at 95°C (and switch back to normal at 85°C).
+
+But this also would raise the default shutdown temp to 115°C, which is
+unacceptable. An old (also 3.10) comment by Freescale stated 105°C is the
+maximum allowed silicon temp. Therefore we re-introduce the dedicated
+constant, including the old comment, and set it to 103°C. This is lower
+than Freescale's current limit, but higher than their old one.
+
+Note these are only defaults; the trip points can be adjusted at run time
+simply by writing new values (in millicelsius) to
+/sys/class/thermal/thermal_zone0/trip_point_*_temp.
+
+Freescale also added a check preventing users from raising trip point 0
+higher than the default (was 85, now 95°C). But this seems too restrictive,
+after all root should know what they're doing. Changed code to allow up to
+default shutdown temp (now 103°C).
+
+diff --git a/drivers/thermal/imx_thermal.c b/drivers/thermal/imx_thermal.c
+index fa81518..15eb743 100644
+--- a/drivers/thermal/imx_thermal.c
++++ b/drivers/thermal/imx_thermal.c
+@@ -92,9 +92,15 @@ enum imx_thermal_trip {
+  * It defines the temperature in millicelsius for passive trip point
+  * that will trigger cooling action when crossed.
+  */
+-#define IMX_TEMP_PASSIVE		85000
++#define IMX_TEMP_PASSIVE		95000
+ #define IMX_TEMP_PASSIVE_COOL_DELTA	10000
+ 
++/*
++ * The maximum die temperature on i.MX parts is 105 C, let's give some cushion
++ * for noise and possible temperature rise between measurements.
++ */
++#define IMX_TEMP_CRITICAL		103000
++
+ #define IMX_POLLING_DELAY		2000 /* millisecond */
+ #define IMX_PASSIVE_DELAY		1000
+ 
+@@ -461,7 +467,7 @@ static int imx_set_trip_temp(struct thermal_zone_device *tz, int trip,
+ 	}
+ 
+ 	if (trip == IMX_TRIP_PASSIVE) {
+-		if (temp > IMX_TEMP_PASSIVE)
++		if (temp > IMX_TEMP_CRITICAL)
+ 			return -EINVAL;
+ 		data->temp_passive = temp;
+ 		imx_set_alarm_temp(data, temp);
+@@ -628,10 +634,10 @@ static int imx_get_sensor_data(struct platform_device *pdev)
+ 	data->temp_passive = IMX_TEMP_PASSIVE;
+ 
+ 	/*
+-	 * Set the default critical trip point to 20 C higher
+-	 * than passive trip point. Can be changed from userspace.
++	 * Set the default critical trip point to IMX_TEMP_CRITICAL.
++	 * Can be changed from userspace.
+ 	 */
+-	data->temp_critical = IMX_TEMP_PASSIVE + 20 * 1000;
++	data->temp_critical = IMX_TEMP_CRITICAL;
+ 
+ 	return 0;
+ }
+-- 
+2.1.4
+

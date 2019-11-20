@@ -1,0 +1,25 @@
+From be1b3ebff3bd674ac26e6b22f41a56261a37c19f Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Thu, 6 Nov 2014 12:34:06 +0100
+Subject: Clarify kernel message indicating the CPU variant.
+
+The kernel code mostly talks about i.MX6 "Quad" and "DualLite", but they
+actually mean "Quad/Dual" and "DualLite/Solo". Having received complaints
+about the wrong CPU being detected we better clarify this a bit.
+
+diff --git a/arch/arm/mach-imx/mach-imx6q.c b/arch/arm/mach-imx/mach-imx6q.c
+index ae5c3cd..77441a0 100644
+--- a/arch/arm/mach-imx/mach-imx6q.c
++++ b/arch/arm/mach-imx/mach-imx6q.c
+@@ -319,7 +319,7 @@ static void __init imx6q_init_machine(void)
+ 	if (cpu_is_imx6q() && imx_get_soc_revision() == IMX_CHIP_REVISION_2_0)
+ 		imx_print_silicon_rev("i.MX6QP", IMX_CHIP_REVISION_1_0);
+ 	else
+-		imx_print_silicon_rev(cpu_is_imx6dl() ? "i.MX6DL" : "i.MX6Q",
++		imx_print_silicon_rev(cpu_is_imx6dl() ? "i.MX6DL/S" : "i.MX6Q/D",
+ 				 imx_get_soc_revision());
+ 
+ 	parent = imx_soc_device_init();
+-- 
+2.1.4
+

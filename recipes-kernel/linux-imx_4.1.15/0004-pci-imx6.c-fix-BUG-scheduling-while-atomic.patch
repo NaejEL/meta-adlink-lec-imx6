@@ -1,0 +1,26 @@
+From f67614e99d42c8e6294aa5f37a4c1ad7b2995cb8 Mon Sep 17 00:00:00 2001
+From: Max Krummenacher <max.krummenacher@toradex.com>
+Date: Mon, 23 Jun 2014 17:22:22 +0200
+Subject: pci-imx6.c: fix BUG, scheduling while atomic
+
+Depending on the preemptive settings 'usleep_range' are called in code
+where this is not allowed. Use udelay instead of usleep_range
+BUG: scheduling while atomic: swapper/0/1/0x00000002
+
+diff --git a/drivers/pci/host/pci-imx6.c b/drivers/pci/host/pci-imx6.c
+index 585d221..9b6bc73 100644
+--- a/drivers/pci/host/pci-imx6.c
++++ b/drivers/pci/host/pci-imx6.c
+@@ -639,7 +639,8 @@ static void imx6_pcie_reset_phy(struct pcie_port *pp)
+ 		 PHY_RX_OVRD_IN_LO_RX_PLL_EN);
+ 	pcie_phy_write(pp->dbi_base, PHY_RX_OVRD_IN_LO, temp);
+ 
+-	usleep_range(2000, 3000);
++	/* BUG: scheduling while atomic: swapper/0/1/0x00000002, use udelay instead of usleep_range*/
++	udelay(2000);
+ 
+ 	pcie_phy_read(pp->dbi_base, PHY_RX_OVRD_IN_LO, &temp);
+ 	temp &= ~(PHY_RX_OVRD_IN_LO_RX_DATA_EN |
+-- 
+2.1.4
+

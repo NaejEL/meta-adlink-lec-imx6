@@ -1,0 +1,116 @@
+From 50fb2bda4f2b255ea70dffb5bb8a6e1d3044b5ae Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Tue, 11 Mar 2014 21:28:10 +0100
+Subject: Adapt HDMI interface.
+
+- Move HDMI from IPU1 DI0 to DI1 so it's no longer shared with parallel RGB
+  but can display independent content.
+- HDMI EDID is not on I2C2, we use the dedicated DDC function instead. Also
+  means we can support HDCP (High-bandwidth Digital Content Protection)
+  now. Replace seperate I2C EDID node with pinmux.
+- Boost data signals D0-D2 to improve rise time: On LEC-iMX6 module plus
+  carrier combos, signal quality is trickier than on SabreSD SBCs. To pass
+  compliance set sup_tx_lvl and tx_{sym,tra,trb}on to maximum.
+- HDMI CEC (Consumer Electronics Control) uses a different pin.
+- The fb device is equally enabled for Quad and Solo, move 'status' to
+  common DTSI.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 0a13d00..c16690e 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -218,7 +218,7 @@
+ 		spdif-out;
+ 	};
+ 
+-	mxcfb1: fb@0 {
++	mxcfb1: fb@0 {	/* IPU1 DI1: /dev/fb0=HDMI, fb1=IPU1's overlay */
+ 		compatible = "fsl,mxc_sdc_fb";
+ 		disp_dev = "hdmi";
+ 		interface_pix_fmt = "RGB24";
+@@ -226,7 +226,7 @@
+ 		default_bpp = <24>;
+ 		int_clk = <0>;
+ 		late_init = <0>;
+-		status = "disabled";
++		status = "okay";
+ 	};
+ 
+ 	mxcfb2: fb@1 {	/* IPU1 DI0: /dev/fb2=parallel RGB */
+@@ -390,15 +390,18 @@
+ 	status = "okay";
+ };
+ 
+-&hdmi_core {
++&hdmi_core {		/* HDMI (see fb above) */
+ 	ipu_id = <0>;
+-	disp_id = <0>;
++	disp_id = <1>;
+ 	status = "okay";
+ };
+ 
+ &hdmi_video {
+-	fsl,phy_reg_vlev = <0x0294>;
+-	fsl,phy_reg_cksymtx = <0x800d>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_hdmi_hdcp>;
++	fsl,hdcp; /* also means we use the dedicated DDC function */
++	fsl,phy_reg_vlev = <0x03f4>;
++	fsl,phy_reg_cksymtx = <0x800f>;
+ 	/* In the list of predefined video modes include any provided by the
+ 	 * monitor's EDID data instead of only a few found in mxc_edid.c:
+ 	 * mxc_cea_mode[].
+@@ -594,11 +597,6 @@
+ 		};
+ 	};
+ 
+-	hdmi: edid@50 {
+-		compatible = "fsl,imx6-hdmi-i2c";
+-		reg = <0x50>;
+-	};
+-
+ #if CONFIG_I2S_AUDIO == 1
+ 	codec: tlv320aic23@1a {		/* Audio codec on LEC-Base R1 carrier */
+ 		compatible = "ti,tlv320aic23";
+@@ -746,7 +744,7 @@
+ 
+ 		pinctrl_hdmi_cec: hdmicecgrp {
+ 			fsl,pins = <
+-				MX6QDL_PAD_KEY_ROW2__HDMI_TX_CEC_LINE 0x108b0
++				MX6QDL_PAD_EIM_A25__HDMI_TX_CEC_LINE	0x108b0
+ 			>;
+ 		};
+ 
+diff --git a/arch/arm/boot/dts/lec-imx6q.dts b/arch/arm/boot/dts/lec-imx6q.dts
+index 268d10b..b47ec42 100644
+--- a/arch/arm/boot/dts/lec-imx6q.dts
++++ b/arch/arm/boot/dts/lec-imx6q.dts
+@@ -27,10 +27,6 @@
+ 	};
+ };
+ 
+-&mxcfb1 {
+-	status = "okay";
+-};
+-
+ &sata {
+ 	status = "okay";
+ };
+diff --git a/arch/arm/boot/dts/lec-imx6s.dts b/arch/arm/boot/dts/lec-imx6s.dts
+index 2381b60..de33ba3 100644
+--- a/arch/arm/boot/dts/lec-imx6s.dts
++++ b/arch/arm/boot/dts/lec-imx6s.dts
+@@ -30,10 +30,6 @@
+ 	};
+ };
+ 
+-&mxcfb1 {
+-	status = "okay";
+-};
+-
+ #if CONFIG_SOLO_LVDS
+ &mxcfb2 {	/* parallel RGB */
+ #else
+-- 
+2.1.4
+

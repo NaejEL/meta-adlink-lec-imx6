@@ -1,0 +1,49 @@
+From 2cca7d40baac7d77acacc3abb16a7575964bbdcf Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Wed, 4 Jun 2014 19:22:19 +0200
+Subject: Increase several PCIe link up timeouts for PEX8605 switch.
+
+The i.MX6 PCIe driver waits max. 50 ms for link training to complete. The
+PLX PEX8605 4-port PCIe switch will not work with this, it needs about
+75 ms. Increase the timeout to 150 ms. Also increase the interval between
+checks from 10 to 2000 us. In my tests a query interval of 1 ms didn't work
+for some reason, but 2 ms did.
+
+Additionally introduce a 1..2 ms sleep between dw_pcie_setup_rc() and
+imx6_pcie_start_link(). Tests showed the switch will only be detected if
+CONFIG_PCI_DEBUG is on or if a delay of at least 400..450 us is added.
+
+diff --git a/drivers/pci/host/pci-imx6.c b/drivers/pci/host/pci-imx6.c
+index 8fef468..b0682d0 100644
+--- a/drivers/pci/host/pci-imx6.c
++++ b/drivers/pci/host/pci-imx6.c
+@@ -623,6 +623,8 @@ static int imx6_pcie_host_init(struct pcie_port *pp)
+ 
+ 	dw_pcie_setup_rc(pp);
+ 
++	usleep_range(1000, 2000);
++
+ 	ret = imx6_pcie_start_link(pp);
+ 	if (ret < 0)
+ 		return ret;
+@@ -654,7 +656,7 @@ static void imx6_pcie_reset_phy(struct pcie_port *pp)
+ static int imx6_pcie_link_up(struct pcie_port *pp)
+ {
+ 	u32 rc, debug_r0, rx_valid;
+-	int count = 5000;
++	int count = 75;
+ 	struct imx6_pcie *imx6_pcie = to_imx6_pcie(pp);
+ 
+ 	/*
+@@ -686,7 +688,7 @@ static int imx6_pcie_link_up(struct pcie_port *pp)
+ 		 * Wait a little bit, then re-check if the link finished
+ 		 * the training.
+ 		 */
+-		udelay(10);
++		udelay(2000);
+ 	}
+ 
+ 	if (!is_imx7d_pcie(imx6_pcie)) {
+-- 
+2.1.4
+

@@ -1,0 +1,73 @@
+From bc3842b7288e7f6df7c92e877d43d198bd80ac22 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Wed, 22 Jan 2014 23:04:33 +0100
+Subject: It's not an error when camera power isn't software-controllable.
+
+Change messages in ov5640_mipi.c and ov5642.c to be less aggressive, just
+like they already are in ov5640.c.
+
+diff --git a/drivers/media/platform/mxc/capture/ov5640_mipi.c b/drivers/media/platform/mxc/capture/ov5640_mipi.c
+index 0d146b5..2dce407 100644
+--- a/drivers/media/platform/mxc/capture/ov5640_mipi.c
++++ b/drivers/media/platform/mxc/capture/ov5640_mipi.c
+@@ -728,7 +728,7 @@ static int ov5640_power_on(struct device *dev)
+ 				"%s:io set voltage ok\n", __func__);
+ 		}
+ 	} else {
+-		pr_err("%s: cannot get io voltage error\n", __func__);
++		pr_warn("%s: cannot get io voltage\n", __func__);
+ 		io_regulator = NULL;
+ 	}
+ 
+@@ -747,7 +747,7 @@ static int ov5640_power_on(struct device *dev)
+ 		}
+ 	} else {
+ 		core_regulator = NULL;
+-		pr_err("%s: cannot get core voltage error\n", __func__);
++		pr_warn("%s: cannot get core voltage\n", __func__);
+ 	}
+ 
+ 	analog_regulator = devm_regulator_get(dev, "AVDD");
+@@ -766,7 +766,7 @@ static int ov5640_power_on(struct device *dev)
+ 		}
+ 	} else {
+ 		analog_regulator = NULL;
+-		pr_err("%s: cannot get analog voltage error\n", __func__);
++		pr_warn("%s: cannot get analog voltage\n", __func__);
+ 	}
+ 
+ 	return ret;
+diff --git a/drivers/media/platform/mxc/capture/ov5642.c b/drivers/media/platform/mxc/capture/ov5642.c
+index be61222..4ce46c2 100644
+--- a/drivers/media/platform/mxc/capture/ov5642.c
++++ b/drivers/media/platform/mxc/capture/ov5642.c
+@@ -3067,7 +3067,7 @@ static int ov5642_power_on(struct device *dev)
+ 				"%s:io set voltage ok\n", __func__);
+ 		}
+ 	} else {
+-		pr_err("%s: cannot get io voltage error\n", __func__);
++		pr_warn("%s: cannot get io voltage\n", __func__);
+ 		io_regulator = NULL;
+ 	}
+ 
+@@ -3086,7 +3086,7 @@ static int ov5642_power_on(struct device *dev)
+ 		}
+ 	} else {
+ 		core_regulator = NULL;
+-		pr_err("%s: cannot get core voltage error\n", __func__);
++		pr_warn("%s: cannot get core voltage\n", __func__);
+ 	}
+ 
+ 	analog_regulator = devm_regulator_get(dev, "AVDD");
+@@ -3105,7 +3105,7 @@ static int ov5642_power_on(struct device *dev)
+ 		}
+ 	} else {
+ 		analog_regulator = NULL;
+-		pr_err("%s: cannot get analog voltage error\n", __func__);
++		pr_warn("%s: cannot get analog voltage\n", __func__);
+ 	}
+ 
+ 	return ret;
+-- 
+2.1.4
+

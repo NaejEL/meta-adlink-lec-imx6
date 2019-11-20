@@ -1,0 +1,60 @@
+From 65a3228b8b5920c992f9eb6a4b1904881f797e7f Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <Jens.Rottmann@ADLINKtech.com>
+Date: Tue, 31 May 2016 15:33:40 +0200
+Subject: Also implement TLV320AIC23 I2S audio on the LEC-Base R1.
+
+The LEC-Base R1 carrier has a Texas Instruments TLV320AIC23 I2S audio codec
+instead, and it's on I2C2, not I2C1. Audio routing is hardcoded in the
+codec driver, not parsed from the DT.
+
+Support it by selecting CONFIG_I2S_AUDIO == 1 (for LEC-Base R1).
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index 0ca2751..7a081a6 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -12,7 +12,7 @@
+  */
+ 
+ /* On-module multiplexer: 0 enables SMARC SPI0, !=0 enables I2S0 instead:
+- * 2=Freescale SGTL5000 on LEC-Base R2 */
++ * 1=TI TLV320AIC23 on LEC-Base R1 carrier, 2=Freescale SGTL5000 on LEC-Base R2 */
+ #define CONFIG_I2S_AUDIO	2
+ 
+ #include <dt-bindings/gpio/gpio.h>
+@@ -162,7 +162,16 @@
+ 		};
+ 	};
+ 
+-#if CONFIG_I2S_AUDIO == 2
++#if CONFIG_I2S_AUDIO == 1
++	sound-i2s {	/* Audio codec on LEC-Base R1 carrier */
++		compatible = "fsl,imx-audio-tlv320aic23";
++		model = "imx-tlv320aic23";
++		ssi-controller = <&ssi2>;
++		mux-int-port = <2>;
++		mux-ext-port = <3>;
++		audio-codec = <&codec>;
++	};
++#elif CONFIG_I2S_AUDIO == 2
+ 	sound-i2s {	/* Audio codec on LEC-Base R2 carrier */
+ 		compatible = "fsl,imx-audio-sgtl5000";
+ 		model = "imx-sgtl5000";
+@@ -544,6 +553,14 @@
+ 		reg = <0x50>;
+ 	};
+ 
++#if CONFIG_I2S_AUDIO == 1
++	codec: tlv320aic23@1a {		/* Audio codec on LEC-Base R1 carrier */
++		compatible = "ti,tlv320aic23";
++		reg = <0x1a>;
++		clocks = <&clks IMX6QDL_CLK_CKO>; /* SMARC AUDIO_MCK, actually unused on carrier */
++	};
++#endif
++
+ 	ov564x_mipi: ov564x_mipi@3c { /* i2c2 driver */
+ 		compatible = "ovti,ov564x_mipi";
+ 		reg = <0x3c>;
+-- 
+2.1.4
+

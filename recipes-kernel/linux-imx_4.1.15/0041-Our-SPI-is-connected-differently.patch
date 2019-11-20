@@ -1,0 +1,107 @@
+From ceb590c2e82ca2733c35d680f2919f41c14aeeff Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Wed, 8 Jan 2014 15:20:07 +0100
+Subject: Our SPI is connected differently.
+
+- We use SPI1, 2 and 4 instead of just SPI1.
+- SPI1 and 2 provide 2 CS lines (i.e. support 2 devices) each.
+- The on-module SPI flash is on SPI4, using a single CS. It's a different
+  chip, too: Winbond W25Q64 instead of ST M25P32. Apart from the different
+  ID this also means the SPI clock can be 3x faster.
+- To achieve this speed enable the 'phase-shift SPI clock during data input'
+  workaround for 30 MHz and faster clocks.
+- A backup SST 25VF032B also exists, and the BMC may switch chips
+  automatically. Fortunately Linux will just issue a warning and continue if
+  it reads a different chip ID, so there is nothing we have to (or can) do
+  about it.
+- Very different pinmux, naturally.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index bd74766..84c96df 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -295,19 +295,39 @@
+ 	fsl,ldb-di1-parent = <&clks IMX6QDL_CLK_PLL2_PFD0_352M>;
+ };
+ 
+-&ecspi1 {
+-	fsl,spi-num-chipselects = <1>;
+-	cs-gpios = <&gpio4 9 0>;
++&ecspi1 {	/* SMARC SPI0 (instead of I2S0) */
++	fsl,spi-num-chipselects = <2>;
++	cs-gpios = <&gpio5 25 GPIO_ACTIVE_LOW>, /* SMARC CS0 */
++	           <&gpio3 24 GPIO_ACTIVE_LOW>; /* SMARC CS1 */
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_ecspi1>;
+ 	status = "okay";
++};
++
++&ecspi2 {	/* SMARC SPI1 */
++	fsl,spi-num-chipselects = <2>;
++	cs-gpios = <&gpio2 27 GPIO_ACTIVE_LOW>, /* SMARC CS0 */
++	           <&gpio2 26 GPIO_ACTIVE_LOW>; /* SMARC CS1 */
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_ecspi2>;
++	status = "okay";
++};
++
++&ecspi4 {	/* on-module U-Boot SPI */
++	fsl,spi-num-chipselects = <1>;
++	cs-gpios = <&gpio3 25 GPIO_ACTIVE_LOW>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_ecspi4>;
++	fsl,clk-workaround-freq = <30000000>;
++	status = "okay";
+ 
+ 	flash: m25p80@0 {
+ 		#address-cells = <1>;
+ 		#size-cells = <1>;
+-		compatible = "st,m25p32";
+-		spi-max-frequency = <20000000>;
++		compatible = "winbond,w25q64";
++		spi-max-frequency = <66000000>; /* slowest we used was SST25VF032B; i.MX6 provides 60MHz max */
+ 		reg = <0>;
++		m25p,fast-read;
+ 	};
+ };
+ 
+@@ -648,11 +668,31 @@
+ 		};
+ 
+ 		pinctrl_ecspi1: ecspi1grp {
+-			fsl,pins = <
+-				MX6QDL_PAD_KEY_COL1__ECSPI1_MISO	0x100b1
+-				MX6QDL_PAD_KEY_ROW0__ECSPI1_MOSI	0x100b1
+-				MX6QDL_PAD_KEY_COL0__ECSPI1_SCLK	0x100b1
+-				MX6QDL_PAD_KEY_ROW1__GPIO4_IO09		0x1b0b0
++			fsl,pins = <	/* SMARC SPI0 (instead of I2S0) */
++				MX6QDL_PAD_CSI0_DAT6__ECSPI1_MISO	0x100b1
++				MX6QDL_PAD_CSI0_DAT5__ECSPI1_MOSI	0x100b1
++				MX6QDL_PAD_CSI0_DAT4__ECSPI1_SCLK	0x100b1
++				MX6QDL_PAD_CSI0_DAT7__GPIO5_IO25	0x1b0b0 /* SMARC CS0 */
++				MX6QDL_PAD_EIM_D24__GPIO3_IO24		0x1b0b0 /* SMARC CS1 */
++			>;
++		};
++
++		pinctrl_ecspi2: ecspi2grp {
++			fsl,pins = <	/* SMARC SPI1 */
++				MX6QDL_PAD_EIM_OE__ECSPI2_MISO		0x100b1
++				MX6QDL_PAD_EIM_CS1__ECSPI2_MOSI		0x100b1
++				MX6QDL_PAD_EIM_CS0__ECSPI2_SCLK		0x100b1
++				MX6QDL_PAD_EIM_RW__GPIO2_IO26		0x1b0b0 /* SMARC CS1 */
++				MX6QDL_PAD_EIM_LBA__GPIO2_IO27		0x1b0b0 /* SMARC CS0 */
++			>;
++		};
++
++		pinctrl_ecspi4: ecspi4grp {
++			fsl,pins = <	/* on-module U-Boot SPI */
++				MX6QDL_PAD_EIM_D22__ECSPI4_MISO		0x100b1
++				MX6QDL_PAD_EIM_D28__ECSPI4_MOSI		0x100b1
++				MX6QDL_PAD_EIM_D21__ECSPI4_SCLK		0x100b1
++				MX6QDL_PAD_EIM_D25__GPIO3_IO25		0x1b0b0 /* CS3 */
+ 			>;
+ 		};
+ 
+-- 
+2.1.4
+

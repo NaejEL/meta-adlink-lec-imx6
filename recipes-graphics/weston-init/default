@@ -1,0 +1,4 @@
+# Start wayland on hdmi
+EXEC_PRE="/usr/sbin/fbset -fb /dev/fb0 -g 800 600 800 1200 32 -t 25000 88 40 23 1 128 4"
+OPENVTARGS="-v -f -s"
+WESTONARGS="--backend=fbdev-backend.so --device=/dev/fb0"

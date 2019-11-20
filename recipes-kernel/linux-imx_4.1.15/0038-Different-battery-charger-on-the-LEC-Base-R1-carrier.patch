@@ -1,0 +1,112 @@
+From e71eb6b815416f9f18fc1cc9c29343f4f523b2c4 Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Wed, 8 Jan 2014 11:50:56 +0100
+Subject: Different battery charger on the LEC-Base R1 carrier.
+
+Current baseboards use a Linear Technology LTC1760 I2C battery charger
+instead of the eval-board's Maxim MAX8903, but no driver exists so we can't
+add a full device tree entry for it.
+
+Also we don't have a charger LED; remove it.
+
+diff --git a/arch/arm/boot/dts/lec-imx6.dtsi b/arch/arm/boot/dts/lec-imx6.dtsi
+index c3bbfbb..2b8f436 100644
+--- a/arch/arm/boot/dts/lec-imx6.dtsi
++++ b/arch/arm/boot/dts/lec-imx6.dtsi
+@@ -22,19 +22,6 @@
+ 		mxcfb3 = &mxcfb4;
+ 	};
+ 
+-	battery: max8903@0 {
+-		compatible = "fsl,max8903-charger";
+-		pinctrl-names = "default";
+-		dok_input = <&gpio2 24 1>;
+-		uok_input = <&gpio1 27 1>;
+-		chg_input = <&gpio3 23 1>;
+-		flt_input = <&gpio5 2 1>;
+-		fsl,dcm_always_high;
+-		fsl,dc_valid;
+-		fsl,usb_valid;
+-		status = "okay";
+-	};
+-
+ 	hannstar_cabc {
+ 		compatible = "hannstar,cabc";
+ 		lvds0 {
+@@ -51,12 +38,6 @@
+ 
+ 	leds {
+ 		compatible = "gpio-leds";
+-
+-		charger-led {
+-			gpios = <&gpio1 2 0>;
+-			linux,default-trigger = "max8903-charger-charging";
+-			retain-state-suspended;
+-		};
+ 	};
+ 
+ 	memory: memory {
+@@ -609,6 +590,11 @@
+ 		interrupt-parent = <&gpio3>;
+ 		interrupts = <16 1>;
+ 	};
++
++	ltc1760@0a {			/* Battery charger on LEC-Base R1 carrier */
++		compatible = "linear,ltc1760"; /* guessing, no driver found */
++		reg = <0x0a>;
++	};
+ };
+ 
+ &iomuxc {
+@@ -886,14 +872,6 @@
+ 			>;
+ 		};
+ 	};
+-
+-	gpio_leds {
+-		pinctrl_gpio_leds: gpioledsgrp {
+-			fsl,pins = <
+-				MX6QDL_PAD_GPIO_2__GPIO1_IO02 0x1b0b0
+-			>;
+-		};
+-	};
+ };
+ 
+ &ldb {
+diff --git a/arch/arm/boot/dts/lec-imx6q.dts b/arch/arm/boot/dts/lec-imx6q.dts
+index ebeb6f5..172ea2f 100644
+--- a/arch/arm/boot/dts/lec-imx6q.dts
++++ b/arch/arm/boot/dts/lec-imx6q.dts
+@@ -21,12 +21,6 @@
+ 	compatible = "adlink,lec-imx6", "fsl,imx6q";
+ };
+ 
+-&battery {
+-	offset-charger = <1900>;
+-	offset-discharger = <1694>;
+-	offset-usb-charger = <1685>;
+-};
+-
+ &ldb {
+ 	lvds-channel@0 {
+ 		crtc = "ipu2-di0";
+diff --git a/arch/arm/boot/dts/lec-imx6s.dts b/arch/arm/boot/dts/lec-imx6s.dts
+index 1b55d2d..03032d6 100644
+--- a/arch/arm/boot/dts/lec-imx6s.dts
++++ b/arch/arm/boot/dts/lec-imx6s.dts
+@@ -17,12 +17,6 @@
+ 	compatible = "adlink,lec-imx6", "fsl,imx6dl";
+ };
+ 
+-&battery {
+-	offset-charger = <1485>;
+-	offset-discharger = <1464>;
+-	offset-usb-charger = <1285>;
+-};
+-
+ &ldb {
+ 	lvds-channel@0 {
+ 		crtc = "ipu1-di0";
+-- 
+2.1.4
+

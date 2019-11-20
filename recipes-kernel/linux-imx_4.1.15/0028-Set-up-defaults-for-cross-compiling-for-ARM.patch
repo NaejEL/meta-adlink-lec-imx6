@@ -1,0 +1,45 @@
+From a57e7ee0477f92de8fd517a19100a5d12959c6aa Mon Sep 17 00:00:00 2001
+From: Jens Rottmann <JRottmann@LiPPERTembedded.de>
+Date: Tue, 1 Apr 2014 22:14:06 +0200
+Subject: Set up defaults for cross-compiling for ARM.
+
+Usually you'd have to do "make ARCH=arm CROSS_COMPILE=... menuconfig" or
+similar every time, because a simple "make" would guess ARCH from the host,
+i.e. x86 usually, and completely mess up the .config, even if you later use
+ARCH=arm again. This can lead to very strange errors. Forgetting e.g.
+CROSS_COMPILE=arm-linux-gnueabihf- hasn't such serious consequences except
+that compiling will fail, but it's tiring to type every time.
+
+Default ARCH is changed in the top level Makefile. That's not how it's meant
+to work for the mainline, but this patched source tree is i.MX6-specific
+anyway. CROSS_COMPILE is set in the defconfig, i.e. it can be changed easily
+with "make menuconfig" - and has to be if using a different cross-compiler.
+
+After changing the defaults a convenient "make menuconfig" or "make modules"
+will again suffice.
+
+diff --git a/Makefile b/Makefile
+index bea5ca2..63560a5 100644
+--- a/Makefile
++++ b/Makefile
+@@ -249,7 +249,7 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
+ # "make" in the configured kernel build directory always uses that.
+ # Default value for CROSS_COMPILE is not to prefix executables
+ # Note: Some architectures assign CROSS_COMPILE in their arch/*/Makefile
+-ARCH		?= $(SUBARCH)
++ARCH		?= arm
+ CROSS_COMPILE	?= $(CONFIG_CROSS_COMPILE:"%"=%)
+ 
+ # Architecture as present in compile.h
+diff --git a/arch/arm/configs/lec-imx6_defconfig b/arch/arm/configs/lec-imx6_defconfig
+index b6d7c51..9b6a159 100644
+--- a/arch/arm/configs/lec-imx6_defconfig
++++ b/arch/arm/configs/lec-imx6_defconfig
+@@ -1,3 +1,4 @@
++CONFIG_CROSS_COMPILE="arm-linux-gnueabihf-"
+ CONFIG_KERNEL_LZO=y
+ CONFIG_SYSVIPC=y
+ CONFIG_NO_HZ=y
+-- 
+2.1.4
+
